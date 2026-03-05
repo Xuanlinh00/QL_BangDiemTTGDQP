@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+
+# Environment & secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+client_secret_*.json
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Logs
+*.log
+logs/
+
+# OS & editor
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.claude/
+
+# Vite / esbuild
+frontend/dist/
+frontend/.vite/
+
+# TypeScript compiled
+backend-node/dist/
+
+# Python
+*.sqlite
+*.db
