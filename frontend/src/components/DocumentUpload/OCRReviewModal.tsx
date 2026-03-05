@@ -18,7 +18,9 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
-import { extractFromBlob, PdfExtractResult } from '../../utils/pdfExtract'
+import { PdfExtractResult, extractFromBlob } from '../../utils/pdfExtract'
+import PDFViewer from './PDFViewer'
+import { exportPdfFormatToExcel } from '../../utils/excelExport'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,66 @@ const DEMO_RECORDS: StudentRecord[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// ── Module-level: tránh gọi backend lặp lại khi đã biết offline ─────────────
+// Dùng cả module var (nhanh, luôn hoạt động) + sessionStorage (sống qua HMR)
+const _SS_OFFLINE_KEY = 'tvu_backend_offline_ts'
+const BACKEND_RETRY_MS = 60_000
+let _moduleOfflineTs = 0   // reset khi HMR, nhưng sessionStorage sẽ khôi phục
+
+function isBackendKnownOffline(): boolean {
+  // Fast path: module var (trong cùng 1 JS module instance)
+  if (_moduleOfflineTs > 0 && Date.now() - _moduleOfflineTs < BACKEND_RETRY_MS) return true
+  // HMR-proof path: sessionStorage (nếu module var đã bị reset bởi HMR)
+  try {
+    const ts = Number(sessionStorage.getItem(_SS_OFFLINE_KEY) ?? 0)
+    if (ts > 0 && Date.now() - ts < BACKEND_RETRY_MS) {
+      _moduleOfflineTs = ts  // đồng bộ lại module var
+      return true
+    }
+  } catch { /* sessionStorage blocked (private mode): dùng module var */ }
+  return false
+}
+function markBackendOffline(): void {
+  _moduleOfflineTs = Date.now()
+  try { sessionStorage.setItem(_SS_OFFLINE_KEY, String(_moduleOfflineTs)) } catch { /* ignore */ }
+}
+function markBackendOnline(): void {
+  _moduleOfflineTs = 0
+  try { sessionStorage.removeItem(_SS_OFFLINE_KEY) } catch { /* ignore */ }
+}
+
+// ── Module-level: dedup xử lý file — sống qua HMR nhờ sessionStorage + module var ──
+const _SS_JOB_KEY = 'tvu_ocr_job'
+const JOB_TTL_MS = 5 * 60_000
+let _currentJobId = ''   // module-level fast path
+function _blobJobId(blob: Blob): string {
+  const name = (blob as File).name ?? ''
+  const lm   = (blob as File).lastModified ?? 0
+  return `${blob.size}:${lm}:${name}`
+}
+function isJobAlreadyRunning(blob: Blob): boolean {
+  const id = _blobJobId(blob)
+  if (_currentJobId === id) return true
+  try {
+    const data = JSON.parse(sessionStorage.getItem(_SS_JOB_KEY) ?? 'null')
+    if (data?.id === id && Date.now() - data.ts < JOB_TTL_MS) {
+      _currentJobId = id
+      return true
+    }
+  } catch { /* ignore */ }
+  return false
+}
+function markJobRunning(blob: Blob): void {
+  _currentJobId = _blobJobId(blob)
+  try {
+    sessionStorage.setItem(_SS_JOB_KEY, JSON.stringify({ id: _currentJobId, ts: Date.now() }))
+  } catch { /* ignore */ }
+}
+function clearRunningJob(): void {
+  _currentJobId = ''
+  try { sessionStorage.removeItem(_SS_JOB_KEY) } catch { /* ignore */ }
+}
+
 function computeKetQua(score: string): string {
   const n = parseFloat(score.replace(',', '.'))
   if (isNaN(n)) return ''
@@ -104,6 +166,240 @@ function recordsToApiShape(records: StudentRecord[]) {
   }))
 }
 
+// ── OCR text normalizer: sửa lỗi nhận dạng phổ biến của Tesseract ────────────
+function normalizeOcrText(raw: string): string {
+  return raw
+    .replace(/\r/g, '')
+    // Ghép số bị tách bởi 1 khoảng trắng (OCR artifact): "7 5" → "75"
+    // KHÔNG ghép khi cách 2+ dấu cách (phân cách cột bảng)
+    .replace(/(\d) (\d)/g, '$1$2')
+    // Sửa dấu thập phân bị tách: "9 . 8" hoặc "9,8" → "9.8"
+    .replace(/(\d)\s*[.,]\s*(\d)/g, '$1.$2')
+    // Sửa O/o/Q → 0 khi kẹp giữa 2 chữ số (OCR nhầm 0 vs O)
+    .replace(/(\d)[OoQq](\d)/g, '$10$2')
+    // Sửa l/I/| → 1 khi kẹp giữa 2 chữ số
+    .replace(/(\d)[lI|](\d)/g, '$11$2')
+    // Xóa ký tự nhiễu đầu dòng từ Tesseract
+    .replace(/^[\[\]{}|\\<>@#$%^&*~`]+/gm, '')
+}
+
+// ── Client-side parser (fallback when Python worker is unreachable) ──────────
+// Extracts student records from raw PDF text without server round-trip.
+function parseRecordsClientSide(
+  rawText: string,
+  docType: string,
+): { records: StudentRecord[]; meta: ExtractMeta } | null {
+  if (docType !== 'DSGD') return null
+
+  const normalised = normalizeOcrText(rawText)
+
+  const lines = normalised
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 1)
+
+  // MSSV TVU: 9 chữ số bắt đầu bằng 1 (vd: 110122001)
+  // Hoặc có thể có prefix chữ hoa (DA210001, DT22001...)
+  // Cho phép OCR nhầm O↔0, l↔1 nên dùng [0-9OIl] sau ký tự đầu
+  const MSSV_RE = /\b([A-Z]{1,3}[0-9]{5,10}|1[0-9]{8}|[0-9]{8,10})\b/g
+
+  // Vietnamese name: 2-5 capitalised words (ASCII + accented)
+  const VIET_CAP =
+    '[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]'
+  const VIET_LC =
+    '[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]'
+  const WORD = `${VIET_CAP}${VIET_LC}+`
+  const NAME_RE = new RegExp(`${WORD}(?:\\s+${WORD}){1,4}`, 'g')
+
+  // Score in range 0-10 (e.g. 7.5, 10, 4, 8.0)
+  const SCORE_RE = /\b(10(?:\.0{1,2})?|\d(?:[.,]\d{1,2})?)\b/g
+
+  // Class code: looks like DA21TYC, DT20A, etc.
+  const LOP_RE = /\b([A-Z]{1,3}\d{2}[A-Z]{2,}[A-Z0-9]*)\b/g
+
+  // Words to skip in name detection
+  const SKIP_NAME = /^(Trà|Vinh|Giáo|Quốc|Phòng|Trường|Nhà|Nước|Hội|Đại|Học|Thi|Kết|Bảng|Danh|Sách|Môn|Phần|Lớp|Ngày|Tháng|Năm|Khoa|Viện|Ban|Ông|Bà|Anh|Chị)/i
+
+  const records: StudentRecord[] = []
+  const seenMssv = new Set<string>()
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Skip header/footer lines
+    if (/^(STT|HỌ|TÊN|MSSV|LỚP|ĐIỂM|KẾT|GHI|===|TRANG|BẢNG|DANH|TRƯỜNG|BỘ|KHOA)/i.test(line)) continue
+
+    MSSV_RE.lastIndex = 0
+    const mssvM = MSSV_RE.exec(line)
+    if (!mssvM) continue
+
+    const mssv = mssvM[1]
+    // Skip years and common 4-digit codes
+    if (/^(19|20)\d{2}$/.test(mssv)) continue
+    if (seenMssv.has(mssv)) continue
+    seenMssv.add(mssv)
+
+    // Context: current ± 1 adjacent line
+    const ctx = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 2)).join(' ')
+
+    // ── Name ───────────────────────────────────────────────────────────────
+    NAME_RE.lastIndex = 0
+    const nameMatches: string[] = []
+    let nm: RegExpExecArray | null
+    while ((nm = NAME_RE.exec(ctx)) !== null) {
+      const w = nm[0].trim()
+      if (SKIP_NAME.test(w)) continue
+      if (w.split(' ').length < 2) continue
+      if (w === mssv) continue
+      nameMatches.push(w)
+    }
+    const ho_ten = nameMatches[0] ?? ''
+
+    // ── Class ──────────────────────────────────────────────────────────────
+    LOP_RE.lastIndex = 0
+    let lop = ''
+    let lm: RegExpExecArray | null
+    while ((lm = LOP_RE.exec(ctx)) !== null) {
+      if (lm[1] !== mssv) { lop = lm[1]; break }
+    }
+
+    // ── Scores (look only on current + next line) ──────────────────────────
+    const scoreCtx = lines.slice(i, Math.min(lines.length, i + 2)).join(' ')
+    SCORE_RE.lastIndex = 0
+    const scores: number[] = []
+    let sm: RegExpExecArray | null
+    while ((sm = SCORE_RE.exec(scoreCtx)) !== null) {
+      const n = parseFloat(sm[1].replace(',', '.'))
+      if (!isNaN(n) && n >= 0 && n <= 10) scores.push(n)
+    }
+    const dq = scores[0] ?? null
+    const dl = scores[1] ?? null
+
+    records.push({
+      stt: String(records.length + 1),
+      ho_ten,
+      mssv,
+      lop,
+      diem_qp: dq !== null ? String(dq) : '',
+      diem_lan2: dl !== null ? String(dl) : '',
+      ket_qua: dq !== null ? (dq >= 5 ? 'Đạt' : 'Không đạt') : '',
+      ghi_chu: '',
+    })
+  }
+
+  if (records.length === 0) return null
+  return { records, meta: computeMeta(records) }
+}
+
+/**
+ * Parser dự phòng: tìm rows bằng số thứ tự (1, 2, 3...)
+ * Dùng khi OCR bị sai ký tự còn MSSV không nhận ra.
+ */
+function parseRecordsByRowNumber(
+  rawText: string,
+): { records: StudentRecord[]; meta: ExtractMeta } | null {
+  const lines = rawText
+    .replace(/\r/g, '')
+    .replace(/(\d) (\d)/g, '$1$2')  // chỉ ghép khi cách 1 dấu cách
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 1)
+
+  // Tìm dòng bắt đầu bằng số thứ tự: "1", "1.", "1 " kèm nội dung
+  const ROW_RE = /^(\d{1,3})[.)\s]\s*(.+)/
+  const MSSV_ROW_RE = /\b(1\d{8}|\d{8,10}|[A-Z]{1,3}\d{5,10})\b/
+  const SCORE_RE = /\b(10(?:\.0{1,2})?|[0-9](?:[.,]\d{1,2})?)\b/g
+
+  const records: StudentRecord[] = []
+  let expectedStt = 1
+
+  for (const line of lines) {
+    const m = ROW_RE.exec(line)
+    if (!m) continue
+    const sttNum = parseInt(m[1], 10)
+    // Chỉ nhận số thứ tự liên tiếp (tránh nhận số ngẫu nhiên)
+    if (sttNum !== expectedStt && sttNum !== expectedStt + 1) continue
+    expectedStt = sttNum + 1
+
+    const rest = m[2].trim()
+    // Tách các token bằng khoảng trắng ≥2 hoặc tab
+    const tokens = rest.split(/\s{2,}|\t/).map(t => t.trim()).filter(Boolean)
+
+    // Thu thập điểm số
+    SCORE_RE.lastIndex = 0
+    const scores: number[] = []
+    let sm: RegExpExecArray | null
+    while ((sm = SCORE_RE.exec(rest)) !== null) {
+      const n = parseFloat(sm[1].replace(',', '.'))
+      if (!isNaN(n) && n >= 0 && n <= 10) scores.push(n)
+    }
+
+    // Tìm MSSV trực tiếp bằng regex trong cả dòng (không phụ thuộc vào tách token)
+    const mssvMatch = MSSV_ROW_RE.exec(rest)
+    const mssv = mssvMatch?.[1] ?? tokens.find(t => /^[A-Za-z0-9]{5,15}$/.test(t) && !/^[A-Za-z]{1,3}$/.test(t)) ?? ''
+    // Tên: token có ≥2 chữ cái và không phải toàn số, không phải mssv
+    const ho_ten = tokens.find(t => /[a-zA-ZÀ-ỹ]{2}/.test(t) && !/^\d+$/.test(t) && t !== mssv) ?? ''
+    const dq = scores[0] ?? null
+    const dl = scores[1] ?? null
+
+    records.push({
+      stt: String(sttNum),
+      ho_ten,
+      mssv,
+      lop: '',
+      diem_qp:  dq !== null ? String(dq) : '',
+      diem_lan2: dl !== null ? String(dl) : '',
+      ket_qua:  dq !== null ? (dq >= 5 ? 'Đạt' : 'Không đạt') : '',
+      ghi_chu: '',
+    })
+  }
+
+  if (records.length < 2) return null
+  return { records, meta: computeMeta(records) }
+}
+
+// ── Helper: chuyển Blob → data URL (để Tesseract.js nhận ảnh) ─────────────────
+/**
+ * Render tất cả trang PDF ra 1 canvas dọc → PNG data URL cho Tesseract.
+ * Ghép nhiều trang giúp OCR nhận đủ dữ liệu bảng trải dài nhiều trang.
+ */
+async function blobToImageDataUrl(blob: Blob): Promise<string> {
+  try {
+    const { pdfjs } = await import('react-pdf')
+    const ab = await blob.arrayBuffer()
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab) }).promise
+    const SCALE = 2.0
+
+    // Render từng trang ra canvas riêng
+    const pageCanvases: HTMLCanvasElement[] = []
+    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) { // tối đa 5 trang
+      const page = await pdf.getPage(i)
+      const vp = page.getViewport({ scale: SCALE })
+      const c = document.createElement('canvas')
+      c.width = vp.width
+      c.height = vp.height
+      await page.render({ canvasContext: c.getContext('2d')!, viewport: vp }).promise
+      pageCanvases.push(c)
+    }
+
+    if (pageCanvases.length === 0) throw new Error('no pages')
+    if (pageCanvases.length === 1) return pageCanvases[0].toDataURL('image/png')
+
+    // Ghép tất cả trang theo chiều dọc
+    const totalWidth  = Math.max(...pageCanvases.map(c => c.width))
+    const totalHeight = pageCanvases.reduce((s, c) => s + c.height, 0)
+    const merged = document.createElement('canvas')
+    merged.width  = totalWidth
+    merged.height = totalHeight
+    const mCtx = merged.getContext('2d')!
+    let y = 0
+    for (const c of pageCanvases) { mCtx.drawImage(c, 0, y); y += c.height }
+    return merged.toDataURL('image/png')
+  } catch {
+    return URL.createObjectURL(blob)
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function OCRReviewModal({
@@ -128,118 +424,336 @@ export default function OCRReviewModal({
   const [validationErrors, setValidationErrors] = useState<Record<number, string[]>>({})
   const [leftWidth, setLeftWidth] = useState(50) // percent
   const dragging = useRef(false)
+  const textExtractedRef = useRef(false)   // guard: only run extraction once
+  const runningRef = useRef(false)         // guard: chống StrictMode double-run
 
-  // ── Step 1: Read PDF in browser (PDF.js) ────────────────────────────────
-  const readPdfInBrowser = useCallback(async (blob: Blob): Promise<string> => {
-    setStep('reading_pdf')
-    setReadProgress('Đang mở file PDF...')
-    try {
-      setReadProgress('Đang đọc text layer...')
-      const result = await extractFromBlob(blob)
-      setPdfReadResult(result)
+  // Bọc onClose để reset guard khi đóng modal
+  const handleClose = useCallback(() => {
+    runningRef.current = false
+    clearRunningJob()
+    onClose()
+  }, [onClose])
 
-      if (result.warnings.length) {
-        result.warnings.forEach(w => toast(w, { icon: '⚠️' }))
-      }
-
-      if (result.isScanned) {
-        setReadProgress(`PDF quét (${result.pageCount} trang) — chuyển sang OCR backend...`)
-        // Scanned: send blob to backend OCR; for now use demo text
-        toast('PDF là bản quét — dùng chế độ OCR backend (Tesseract/Vision)', { icon: '🔍' })
-        return result.text // may be empty, fallback later
-      } else {
-        setReadProgress(`Đã đọc ${result.pageCount} trang, ${result.text.length} ký tự ✅`)
-        toast.success(`Đã đọc ${result.pageCount} trang PDF (${result.text.length} ký tự)`)
-        return result.text
-      }
-    } catch (err) {
-      setReadProgress('Lỗi đọc file')
-      return ''
-    }
-  }, [])
-
-  // ── Step 2: Extract data from OCR text via Python worker ────────────────
+  // ── Step 2: Extract data from OCR text — client-side only ──────────────
   const runExtract = useCallback(async (text: string) => {
     setStep('loading')
-    try {
-      const resp = await fetch(`${workerUrl}/extract/parse-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document_id: docId, raw_text: text, document_type: docType }),
-      })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const data = await resp.json()
-      const parsed: StudentRecord[] = (data.records || []).map((r: Record<string, unknown>, i: number) => ({
-        stt: String(r.stt ?? i + 1),
-        ho_ten: String(r.ho_ten ?? ''),
-        mssv: String(r.mssv ?? ''),
-        lop: String(r.lop ?? ''),
-        diem_qp: r.diem_qp != null ? String(r.diem_qp) : '',
-        diem_lan2: r.diem_lan2 != null ? String(r.diem_lan2) : '',
-        ket_qua: String(r.ket_qua ?? ''),
-        ghi_chu: String(r.ghi_chu ?? ''),
-      }))
-      setRecords(parsed)
-      setMeta(data.meta || {})
-      if (data.warnings?.length) {
-        data.warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
-      }
-    } catch {
-      toast('Không kết nối được worker; dùng dữ liệu mẫu.', { icon: 'ℹ️' })
-      setRecords(DEMO_RECORDS)
-      setMeta(computeMeta(DEMO_RECORDS))
+    const cs = parseRecordsClientSide(text, docType) ?? parseRecordsByRowNumber(text)
+    if (cs && cs.records.length > 0) {
+      setRecords(cs.records)
+      setMeta(cs.meta)
+    } else {
+      setRecords([])
+      setMeta({})
+      setRightTab('text')
+      toast(
+        text.trim().length > 20
+          ? 'Không nhận ra cấu trúc bảng — xem văn bản gốc ở tab "Văn bản" →'
+          : 'Không trích xuất được văn bản. Vui lòng thêm bản ghi thủ công.',
+        { icon: 'ℹ️', duration: 8000 },
+      )
     }
     setStep('review')
-  }, [docId, docType, workerUrl])
+  }, [docType])
 
-  // ── Load demo OCR text when no rawText provided ───────────────────────────
-  const loadDemoText = useCallback(async () => {
+  // ── Document AI / Vision API: gửi scanned PDF lên backend → OCR ──────────
+  const runDocumentAI = useCallback(async (blob: Blob) => {
+    setStep('loading')
+    // Nếu đã biết backend offline, bỏ qua tất cả network call
+    if (isBackendKnownOffline()) {
+      await runTesseractFallback(blob)
+      return
+    }
     try {
-      const resp = await fetch(`${workerUrl}/extract/demo-text`, { method: 'POST' })
-      if (resp.ok) {
-        const data = await resp.json()
-        setRawOcrText(data.raw_text)
-        await runExtract(data.raw_text)
+      const formData = new FormData()
+      formData.append('file', blob, docName || 'document.pdf')
+      formData.append('document_type', docType)
+      formData.append('document_id', docId)
+
+      // Thử Vision API handwriting endpoint trước (nhanh hơn, hỗ trợ chữ viết tay)
+      // Nếu không cấu hình GOOGLE_APPLICATION_CREDENTIALS → fallback Document AI
+      let resp: Response
+      let endpointUsed = 'vision'
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 90000)
+
+      try {
+        setReadProgress('📡 Đang gửi lên Google Vision API (hỗ trợ cả chữ viết tay)...')
+        resp = await fetch(`${workerUrl}/ocr/process-handwriting`, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        })
+        if (!resp.ok) throw new Error(`Vision HTTP ${resp.status}`)
+      } catch (visionErr) {
+        // Vision API thất bại (bất kỳ lý do gì: network / HTTP / credentials)
+        // → cả Document AI cũng trên cùng server → mark offline ngay → Tesseract
+        clearTimeout(timeout)
+        markBackendOffline()
+        await runTesseractFallback(blob)
         return
       }
-    } catch { /* fall through */ }
-    // Pure fallback
+      clearTimeout(timeout)
+
+      const data = await resp.json()
+      const rawText: string = data.raw_text || ''
+      setRawOcrText(rawText)
+
+      if (endpointUsed === 'vision') {
+        // Vision API trả về raw_text trực tiếp → parse thành records
+        setReadProgress(`✅ Google Vision OCR: ${rawText.length} ký tự · ${data.page_count ?? 1} trang`)
+        toast.success(`Vision API OCR thành công! Đọc được ${rawText.length} ký tự (hỗ trợ chữ viết tay).`)
+        if (rawText.trim()) {
+          await runExtract(rawText)
+          return
+        }
+      } else {
+        setReadProgress(`✅ Document AI: ${data.entities?.length ?? 0} trường · ${data.tables?.length ?? 0} bảng`)
+        toast.success(`Document AI OCR thành công! ${data.entities?.length ?? 0} trường được nhận dạng`)
+      }
+
+      // Nếu Document AI trả về bảng → map trực tiếp ra records
+      const tables: Array<{ headers: string[]; rows: Array<{ cells: string[] }> }> = data.tables || []
+      if (tables.length > 0) {
+        const firstTable = tables[0]
+        const headers = firstTable.headers.map((h: string) => h.toLowerCase().trim())
+        const findIdx = (...candidates: string[]) =>
+          candidates.reduce((found, c) => found >= 0 ? found : headers.findIndex(h => h.includes(c)), -1)
+
+        const idxStt   = findIdx('stt', 'số')
+        const idxName  = findIdx('họ tên', 'họ và tên', 'tên')
+        const idxMssv  = findIdx('mssv', 'mã số', 'mã sinh viên')
+        const idxLop   = findIdx('lớp', 'class')
+        const idxDiem  = findIdx('điểm', 'điểm qp', 'điểm gdqp', 'diem')
+        const idxDiem2 = findIdx('lần 2', 'lan 2', 'thi lại')
+        const idxKq    = findIdx('kết quả', 'ket qua', 'kq')
+
+        const mapped: StudentRecord[] = firstTable.rows
+          .filter(row => row.cells.some(c => c.trim()))
+          .map((row, i) => {
+            const c = row.cells
+            const dq = idxDiem >= 0 ? (c[idxDiem] ?? '') : ''
+            return {
+              stt:      idxStt  >= 0 ? (c[idxStt]  ?? String(i + 1)) : String(i + 1),
+              ho_ten:   idxName >= 0 ? (c[idxName] ?? '') : '',
+              mssv:     idxMssv >= 0 ? (c[idxMssv] ?? '') : '',
+              lop:      idxLop  >= 0 ? (c[idxLop]  ?? '') : '',
+              diem_qp:  dq,
+              diem_lan2: idxDiem2 >= 0 ? (c[idxDiem2] ?? '') : '',
+              ket_qua:  idxKq   >= 0 ? (c[idxKq]   ?? computeKetQua(dq)) : computeKetQua(dq),
+              ghi_chu:  '',
+            }
+          })
+
+        if (mapped.length > 0) {
+          setRecords(mapped)
+          setMeta(computeMeta(mapped))
+          setStep('review')
+          return
+        }
+      }
+
+      // Không có bảng → thử parse từ raw_text
+      if (rawText.trim()) {
+        await runExtract(rawText)
+      } else {
+        toast('Document AI không nhận dạng được nội dung. Vui lòng thêm bản ghi thủ công.', { icon: 'ℹ️' })
+        setRecords([])
+        setMeta({})
+        setStep('review')
+      }
+    } catch (err) {
+      const isOffline = err instanceof TypeError && (err.message.includes('fetch') || err.message.includes('Failed'))
+      if (isOffline) {
+        markBackendOffline()
+        await runTesseractFallback(blob)
+      } else {
+        console.error('[Document AI] error:', err)
+        toast.error(`Lỗi Document AI: ${err instanceof Error ? err.message : String(err)}`)
+        setRecords([])
+        setMeta({})
+        setStep('review')
+      }
+    }
+  }, [docId, docName, docType, workerUrl, runExtract])
+
+  // ── Tesseract fallback: xử lý PDF ảnh quét từng trang riêng biệt ─────────
+  const runTesseractFallback = useCallback(async (blob: Blob) => {
+    // 1. Thử text layer trước (nếu PDF có text)
+    try {
+      const { extractFromBlob } = await import('../../utils/pdfExtract')
+      const result = await extractFromBlob(blob)
+      if (!result.isScanned && result.text.trim().length > 20) {
+        setRawOcrText(result.text)
+        setReadProgress(`✅ Text layer: ${result.pageCount} trang · ${result.text.length} ký tự`)
+        const parsed = parseRecordsClientSide(result.text, docType) ?? parseRecordsByRowNumber(result.text)
+        if (parsed && parsed.records.length > 0) {
+          setRecords(parsed.records)
+          setMeta(parsed.meta)
+          setStep('review')
+          return
+        }
+      }
+    } catch { /* tiếp tục */ }
+
+    // 2. PDF ảnh quét → Tesseract (chỉ 2 trang đầu, JPEG để nhanh hơn)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let tessWorker: any = null
+    try {
+      setReadProgress('🔍 PDF ảnh quét — OCR trang 1 (vui lòng chờ ~20 giây)...')
+      toast('Đang OCR... vui lòng chờ.', { icon: '⏳', duration: 60000 })
+      const Tesseract = await import('tesseract.js')
+      const { pdfjs } = await import('react-pdf')
+      const ab = await blob.arrayBuffer()
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab) }).promise
+      const totalPages = Math.min(pdf.numPages, 2)
+      const pageTexts: string[] = []
+
+      // currentPageRef tracks the active page for the shared worker logger
+      let currentPage = 1
+
+      // createWorker (not Tesseract.recognize) so workerBlobURL/workerPath are honoured.
+      // workerBlobURL:false → `new Worker('/tesseract-worker-shim.js')` (direct, not blob-wrapped)
+      // The shim patches self.console.warn then loads the real worker via importScripts.
+      tessWorker = await Tesseract.createWorker('vie+eng', 1, {
+        workerBlobURL: false,
+        workerPath: '/tesseract-worker-shim.js',
+        logger: (m: { status: string; progress: number }) => {
+          if (m.status === 'recognizing text') {
+            setReadProgress(`🔍 Trang ${currentPage}/${totalPages}: ${Math.round(m.progress * 100)}%`)
+          }
+        },
+      } as Parameters<typeof Tesseract.createWorker>[2])
+
+      for (let i = 1; i <= totalPages; i++) {
+        currentPage = i
+        setReadProgress(`🔍 Tesseract OCR trang ${i}/${totalPages}...`)
+        const page = await pdf.getPage(i)
+        const vp = page.getViewport({ scale: 1.8 })
+        const canvas = document.createElement('canvas')
+        canvas.width = vp.width
+        canvas.height = vp.height
+        await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp }).promise
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        const { data: { text } } = await tessWorker.recognize(dataUrl)
+        pageTexts.push(text)
+      }
+
+      await tessWorker.terminate()
+      tessWorker = null
+
+      const fullText = pageTexts.join('\n\n--- TRANG ---\n\n')
+      toast.dismiss()
+      if (fullText.trim().length > 20) {
+        setRawOcrText(fullText)
+        setReadProgress(`✅ Tesseract xong · ${fullText.length} ký tự · ${totalPages} trang`)
+        const parsed = parseRecordsClientSide(fullText, docType) ?? parseRecordsByRowNumber(fullText)
+        if (parsed && parsed.records.length > 0) {
+          setRecords(parsed.records)
+          setMeta(parsed.meta)
+        } else {
+          setRightTab('text')
+        }
+        setStep('review')
+        return
+      }
+    } catch (tessErr) {
+      if (tessWorker) { tessWorker.terminate().catch(() => {}); tessWorker = null }
+      console.warn('[Tesseract] failed:', tessErr)
+    }
+
+    // 3. Thất bại hoàn toàn → hiển thị demo để user nhập tay
+    toast('Không OCR được — hiển thị dữ liệu mẫu, vui lòng chỉnh sửa thủ công.', { icon: 'ℹ️', duration: 8000 })
+    setRecords(DEMO_RECORDS)
+    setMeta(computeMeta(DEMO_RECORDS))
+    setRightTab('table')
+    setStep('review')
+  }, [docType])
+
+  // ── Load demo records khi không có rawText ─────────────────────────────────
+  const loadDemoText = useCallback(() => {
     setRecords(DEMO_RECORDS)
     setMeta(computeMeta(DEMO_RECORDS))
     setStep('review')
-  }, [workerUrl, runExtract])
+  }, [])
+
+  // ── Step 1: Called by PDFViewer when all pages finish loading (replaces readPdfInBrowser) ──
+  const handleViewerTextExtracted = useCallback(async (pages: string[], fullText: string) => {
+    if (textExtractedRef.current) return
+    textExtractedRef.current = true
+
+    setPdfReadResult({
+      text: fullText, pages, pageCount: pages.length,
+      isScanned: pages.every(p => p.trim().length < 20), warnings: [],
+    })
+
+    if (fullText.trim()) {
+      setRawOcrText(fullText)
+      setReadProgress(`Đã đọc ${pages.length} trang, ${fullText.length} ký tự ✅`)
+      toast.success(`Đã đọc ${pages.length} trang PDF (${fullText.length} ký tự)`)
+      await runExtract(fullText)
+    } else {
+      setReadProgress('PDF không có text layer — dùng Tesseract')
+      loadDemoText()
+    }
+  }, [runExtract, loadDemoText])
 
   useEffect(() => {
     if (!isOpen) return
+    if (runningRef.current) return   // StrictMode double-invoke guard
+    runningRef.current = true
+
+    // Xóa job cũ trong sessionStorage (có thể còn sót từ lần trước / page refresh)
+    clearRunningJob()
     setValidationErrors({})
     setPdfReadResult(null)
     setRightTab('table')
+    setRecords([])
+    textExtractedRef.current = false
 
     const run = async () => {
-      // Priority 1: real file blob — đọc văn bản từ PDF trong trình duyệt
+      // Priority 1: file blob — trích xuất trực tiếp bằng pdfjs (không qua PDFViewer callback)
       if (fileBlob) {
-        const extracted = await readPdfInBrowser(fileBlob)
-        if (extracted.trim()) {
-          setRawOcrText(extracted)
-          await runExtract(extracted)
-          return
-        }
-        // extracted empty → scanned PDF, fall through to use demo/worker
-      }
+        textExtractedRef.current = true   // prevent PDFViewer race
+        setStep('loading')
+        setReadProgress('Đang trích xuất văn bản từ PDF...')
+        try {
+          const result = await extractFromBlob(fileBlob)
+          setPdfReadResult(result)
 
-      // Priority 2: rawText already provided by parent
+          const hasText = !result.isScanned && result.text.trim().length > 20
+
+          if (hasText) {
+            // ── Path A: PDF has a text layer ──────────────────────────────────
+            setRawOcrText(result.text)
+            setReadProgress(`✅ Đọc ${result.pageCount} trang · ${result.text.length.toLocaleString()} ký tự`)
+            toast.success(`Đọc xong ${result.pageCount} trang PDF`)
+            await runExtract(result.text)
+          } else {
+            // ── Path B: Scanned / image PDF → Tesseract trực tiếp ────────
+            setReadProgress('🔍 PDF ảnh quét — OCR bằng Tesseract...')
+            await runTesseractFallback(fileBlob)
+          }
+        } catch (e) {
+          console.error('[OCR] extractFromBlob failed:', e)
+          toast.error('Lỗi đọc file PDF. Vui lòng thêm bản ghi thủ công.')
+          setRecords([])
+          setMeta({})
+          setStep('review')
+        }
+        return
+      }
+      // Priority 2: rawText provided by parent
       if (rawText) {
         setStep('loading')
         setRawOcrText(rawText)
         await runExtract(rawText)
         return
       }
-
-      // Priority 3: fetch demo text from worker
+      // Priority 3: demo text from worker
       await loadDemoText()
     }
-
     run()
+    return () => { runningRef.current = false }  // cleanup: reset khi isOpen đổi
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, fileBlob, rawText])
 
@@ -394,6 +908,19 @@ export default function OCRReviewModal({
           </button>
 
           <button
+            onClick={() => {
+              if (records.length === 0) { toast.error('Chưa có dữ liệu để xuất'); return }
+              exportPdfFormatToExcel(records as any[], meta, docName, docType)
+              toast.success(`Đã xuất Excel: ${docName.replace(/\.pdf$/i, '')}.xlsx`)
+            }}
+            disabled={records.length === 0}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded transition-colors"
+            title="Xuất ra Excel theo bố cục PDF gốc"
+          >
+            📥 Xuất Excel
+          </button>
+
+          <button
             onClick={handleSave}
             disabled={step === 'loading' || step === 'saving'}
             className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded transition-colors"
@@ -402,7 +929,7 @@ export default function OCRReviewModal({
           </button>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-400 hover:text-gray-700 text-2xl leading-none px-1"
           >
             ✕
@@ -447,9 +974,20 @@ export default function OCRReviewModal({
             <p className="text-gray-600 mb-6">
               {records.length} bản ghi đã được xác nhận và lưu vào cơ sở dữ liệu.
             </p>
-            <button onClick={onClose} className="px-6 py-2.5 bg-green-600 text-white font-semibold rounded-lg">
-              Đóng
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => {
+                  exportPdfFormatToExcel(records as any[], meta, docName, docType)
+                  toast.success(`Đã xuất Excel: ${docName.replace(/\.pdf$/i, '')}.xlsx`)
+                }}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors"
+              >
+                📥 Xuất Excel
+              </button>
+              <button onClick={handleClose} className="px-6 py-2.5 bg-green-600 text-white font-semibold rounded-lg">
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -469,7 +1007,15 @@ export default function OCRReviewModal({
                 </a>
               )}
             </div>
-            {pdfUrl ? (
+            {/* Local blob → PDFViewer renders pages + extracts text via onGetTextSuccess */}
+            {fileBlob ? (
+              <PDFViewer
+                blob={fileBlob}
+                className="flex-1"
+                onTextExtracted={handleViewerTextExtracted}
+              />
+            ) : pdfUrl ? (
+              /* Drive embed / remote URL → iframe */
               <iframe
                 src={pdfUrl}
                 className="flex-1 border-0"

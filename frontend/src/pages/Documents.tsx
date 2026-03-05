@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import UploadModal from '../components/DocumentUpload/UploadModal'
 import GoogleDriveModal from '../components/DocumentUpload/GoogleDriveModal'
 import OCRReviewModal, { StudentRecord, ExtractMeta } from '../components/DocumentUpload/OCRReviewModal'
-import { exportToExcel } from '../utils/excelExport'
+import { exportToExcel, exportPdfFormatToExcel } from '../utils/excelExport'
 import { GoogleDriveFile } from '../hooks/useGoogleDrive'
 
 // ══════════════════════════════════════
@@ -138,6 +139,35 @@ interface StoredDocument {
 }
 
 const STORAGE_KEY = 'tvu_documents'
+const STUDENT_STORAGE_KEY = 'tvu_student_records'
+
+// ══════════════════════════════════════
+// Student record persistence
+// ══════════════════════════════════════
+interface StoredStudentRecord {
+  docId: number
+  docName: string
+  stt: string
+  ho_ten: string
+  mssv: string
+  lop: string
+  diem_qp: string
+  diem_lan2: string
+  ket_qua: string
+  ghi_chu: string
+}
+
+function loadStudentRecords(): StoredStudentRecord[] {
+  try {
+    const raw = localStorage.getItem(STUDENT_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return []
+}
+
+function saveStudentRecords(records: StoredStudentRecord[]) {
+  localStorage.setItem(STUDENT_STORAGE_KEY, JSON.stringify(records))
+}
 
 function loadDocuments(): StoredDocument[] {
   try {
@@ -160,8 +190,10 @@ function saveDocuments(docs: StoredDocument[]) {
 const blobUrlCache = new Map<number, string>()
 
 export default function Documents() {
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchParams] = useSearchParams()
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') ?? '')
   const [filterType, setFilterType] = useState('all')
+  const [studentRecords, setStudentRecords] = useState<StoredStudentRecord[]>(loadStudentRecords)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState(false)
   const [documents, setDocuments] = useState<StoredDocument[]>(loadDocuments)
@@ -175,16 +207,30 @@ export default function Documents() {
   const [ocrPdfUrl, setOcrPdfUrl] = useState<string | null>(null)
   const [ocrFileBlob, setOcrFileBlob] = useState<Blob | null>(null)
 
+  // Sync URL param ?q= into search input whenever URL changes (e.g. from header search)
+  useEffect(() => {
+    const qParam = searchParams.get('q')
+    if (qParam !== null) setSearchTerm(qParam)
+  }, [searchParams])
+
   // Persist documents whenever they change
   useEffect(() => {
     saveDocuments(documents)
   }, [documents])
 
+  const q = searchTerm.trim().toLowerCase()
+
   const filteredDocuments = documents.filter(doc => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = q === '' || doc.name.toLowerCase().includes(q)
     const matchesType = filterType === 'all' || doc.type === filterType
     return matchesSearch && matchesType
   })
+
+  const matchedStudents = q === '' ? [] : studentRecords.filter(
+    r => r.ho_ten.toLowerCase().includes(q)
+      || r.mssv.toLowerCase().includes(q)
+      || r.lop.toLowerCase().includes(q)
+  )
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -412,7 +458,26 @@ export default function Documents() {
         ? { ...d, ocr_status: 'Completed', extract_status: 'Completed' }
         : d
     ))
+    // Persist student records for search
+    setStudentRecords(prev => {
+      const filtered = prev.filter(r => r.docId !== ocrReviewDoc.id)
+      const newRecords: StoredStudentRecord[] = records.map(r => ({
+        docId: ocrReviewDoc.id,
+        docName: ocrReviewDoc.name,
+        ...r,
+      }))
+      const updated = [...filtered, ...newRecords]
+      saveStudentRecords(updated)
+      return updated
+    })
     toast.success(`Đã xác nhận ${records.length} bản ghi`)
+    // Tự động xuất Excel ngay sau khi xác nhận
+    if (records.length > 0) {
+      setTimeout(() => {
+        exportPdfFormatToExcel(records, _meta, ocrReviewDoc.name, ocrReviewDoc.type as 'DSGD' | 'QD' | 'KeHoach')
+        toast.success(`Đã xuất Excel: ${ocrReviewDoc.name.replace(/\.pdf$/i, '')}.xlsx`)
+      }, 300)
+    }
   }, [ocrReviewDoc])
 
   // ── Export Excel from Node backend (structured DB records) ──
@@ -492,19 +557,29 @@ export default function Documents() {
       </div>
 
       {/* Search / Filter */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <input
-            type="text"
-            placeholder="Tìm kiếm tên file..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className="bg-white rounded-lg shadow p-4 space-y-3">
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Unified search input */}
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+            <input
+              type="text"
+              placeholder="Tìm tên file, tên sinh viên, MSSV hoặc lớp..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >×</button>
+            )}
+          </div>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="all">Tất cả loại</option>
             <option value="DSGD">Danh sách điểm</option>
@@ -512,12 +587,81 @@ export default function Documents() {
             <option value="KeHoach">Kế hoạch</option>
           </select>
           <button
-            onClick={() => { setDocuments(loadDocuments()); toast.success('Đã làm mới') }}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+            onClick={() => { setDocuments(loadDocuments()); setStudentRecords(loadStudentRecords()); toast.success('Đã làm mới') }}
+            className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors text-sm whitespace-nowrap"
           >
             🔄 Làm mới
           </button>
         </div>
+
+        {/* Search summary chips */}
+        {q && (
+          <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+            <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full border border-blue-200">
+              📄 {filteredDocuments.length} tài liệu phù hợp
+            </span>
+            {matchedStudents.length > 0 && (
+              <span className="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full border border-purple-200">
+                👤 {matchedStudents.length} sinh viên phù hợp
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Student search results — shown whenever there are matches */}
+        {matchedStudents.length > 0 && (() => {
+          const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const highlight = (text: string) =>
+            text.split(new RegExp(`(${esc})`, 'gi')).map((part, i) =>
+              part.toLowerCase() === q
+                ? <mark key={i} className="bg-yellow-200 text-gray-900 rounded px-0.5">{part}</mark>
+                : part
+            )
+          return (
+            <div className="border border-purple-200 rounded-lg bg-white overflow-hidden">
+              <div className="px-4 py-2 bg-purple-50 text-purple-800 text-sm font-semibold flex items-center gap-2">
+                👤 Sinh viên — {matchedStudents.length} kết quả
+                <span className="text-purple-500 font-normal text-xs">(tìm theo tên · MSSV · lớp)</span>
+              </div>
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-purple-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-purple-700 uppercase tracking-wide">STT</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-purple-700 uppercase tracking-wide">Họ và Tên</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-purple-700 uppercase tracking-wide">MSSV</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-purple-700 uppercase tracking-wide">Lớp</th>
+                      <th className="px-3 py-2 text-center text-xs font-semibold text-purple-700 uppercase tracking-wide">Điểm QP</th>
+                      <th className="px-3 py-2 text-center text-xs font-semibold text-purple-700 uppercase tracking-wide">Kết quả</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-purple-700 uppercase tracking-wide">Tài liệu</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {matchedStudents.map((r, idx) => (
+                      <tr key={idx} className="hover:bg-purple-50 transition-colors">
+                        <td className="px-3 py-2 text-gray-400 text-xs">{r.stt}</td>
+                        <td className="px-3 py-2 font-medium text-gray-800">{highlight(r.ho_ten)}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-700">{highlight(r.mssv)}</td>
+                        <td className="px-3 py-2 text-gray-700">{highlight(r.lop)}</td>
+                        <td className="px-3 py-2 text-center font-semibold text-gray-800">{r.diem_qp}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            r.ket_qua === 'Đạt' ? 'bg-green-100 text-green-800' :
+                            r.ket_qua === 'Không đạt' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>{r.ket_qua || '—'}</span>
+                        </td>
+                        <td className="px-3 py-2 text-gray-500 text-xs truncate max-w-[180px]" title={r.docName}>
+                          📄 {r.docName}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Table */}
@@ -545,7 +689,16 @@ export default function Documents() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span>{doc.mimeType?.includes('pdf') ? '📄' : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel') ? '📊' : '📎'}</span>
-                        <span className="font-medium text-gray-800 truncate max-w-[200px]" title={doc.name}>{doc.name}</span>
+                        <span className="font-medium text-gray-800 truncate max-w-[200px]" title={doc.name}>
+                          {q
+                            ? doc.name.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, i) =>
+                                part.toLowerCase() === q
+                                  ? <mark key={i} className="bg-yellow-200 text-gray-900 rounded px-0.5">{part}</mark>
+                                  : part
+                              )
+                            : doc.name
+                          }
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -578,6 +731,27 @@ export default function Documents() {
                         >
                           🔬 OCR
                         </button>
+                        {(() => {
+                          const docRecs = studentRecords.filter(r => r.docId === doc.id)
+                          if (docRecs.length === 0) return null
+                          return (
+                            <button
+                              onClick={() => {
+                                exportPdfFormatToExcel(docRecs, {
+                                  lop: docRecs[0]?.lop,
+                                  total_records: docRecs.length,
+                                  so_dat: docRecs.filter(r => r.ket_qua === 'Đạt').length,
+                                  so_khong_dat: docRecs.filter(r => r.ket_qua === 'Không đạt').length,
+                                }, doc.name, doc.type as 'DSGD' | 'QD' | 'KeHoach')
+                                toast.success(`Đã xuất Excel: ${doc.name.replace(/\.pdf$/i, '')}.xlsx`)
+                              }}
+                              className="px-2 py-1 text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded font-medium transition-colors"
+                              title={`Xuất Excel (${docRecs.length} bản ghi)`}
+                            >
+                              📥 Excel
+                            </button>
+                          )
+                        })()}
                         <button
                           onClick={() => handleViewFile(doc)}
                           className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium transition-colors"

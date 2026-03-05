@@ -1,35 +1,41 @@
-import { useQuery } from '@tanstack/react-query'
-import api from '../services/api'
+import { useMemo } from 'react'
 import { DashboardMetrics } from '../types'
 
+// Compute metrics entirely from localStorage — no backend required
+function useLocalMetrics(): DashboardMetrics {
+  return useMemo(() => {
+    let docs: any[] = []
+    let students: any[] = []
+    try { docs = JSON.parse(localStorage.getItem('tvu_documents') || '[]') } catch {}
+    try { students = JSON.parse(localStorage.getItem('tvu_student_records') || '[]') } catch {}
+
+    const total = docs.length
+    const completed = docs.filter((d: any) => d.ocr_status === 'Completed').length
+    const pending = docs.filter((d: any) => d.ocr_status === 'Pending' || d.ocr_status === 'Processing').length
+    const errors = docs.filter((d: any) => d.ocr_status === 'Error').length
+    const totalPages = docs.reduce((s: number, d: any) => s + (d.pages || 0), 0)
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+
+    const alerts: string[] = []
+    if (errors > 0) alerts.push(`${errors} file bị lỗi OCR`)
+    if (pending > 0) alerts.push(`${pending} file đang chờ xử lý`)
+
+    return {
+      total_documents: total,
+      total_pages: totalPages,
+      ocr_completed_percent: pct,
+      total_students: students.length,
+      total_scores: students.filter((s: any) => s.diem_qp && s.diem_qp !== '').length,
+      documents_pending: pending,
+      documents_error: errors,
+      decisions_linked: docs.filter((d: any) => d.type === 'QD' && d.ocr_status === 'Completed').length,
+      alerts,
+    }
+  }, [])
+}
+
 export default function Dashboard() {
-  const { data: metrics, isLoading, error } = useQuery({
-    queryKey: ['dashboard-metrics'],
-    queryFn: async () => {
-      const response = await api.get('/dashboard/metrics')
-      return response.data.data as DashboardMetrics
-    },
-    retry: 1,
-  })
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Đang tải dữ liệu...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-        Lỗi tải dữ liệu. Vui lòng thử lại.
-      </div>
-    )
-  }
+  const metrics = useLocalMetrics()
 
   return (
     <div className="space-y-6">

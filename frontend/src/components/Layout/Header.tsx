@@ -6,6 +6,7 @@ export default function Header() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [headerSearch, setHeaderSearch] = useState('')
   const [notifications, setNotifications] = useState([
     { id: 1, message: 'OCR processing completed for 5 documents', time: '5 min ago', read: false },
     { id: 2, message: 'Data extraction finished', time: '1 hour ago', read: false },
@@ -37,6 +38,14 @@ export default function Header() {
           <input
             type="text"
             placeholder="Tìm kiếm..."
+            value={headerSearch}
+            onChange={(e) => setHeaderSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && headerSearch.trim()) {
+                navigate(`/documents?q=${encodeURIComponent(headerSearch.trim())}`)
+                setHeaderSearch('')
+              }
+            }}
             className="bg-transparent ml-2 outline-none text-sm w-full text-gray-700 placeholder-gray-500"
           />
         </div>

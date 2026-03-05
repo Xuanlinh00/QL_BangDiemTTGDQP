@@ -1,139 +1,107 @@
-/**
- * pdfExtract.ts
- * ─────────────
- * Đọc nội dung văn bản từ file PDF trực tiếp trong trình duyệt,
- * sử dụng PDF.js (đã có sẵn qua react-pdf / pdfjs-dist).
- *
- * Hỗ trợ:
- *   - PDF có text layer (PDF gốc / digital) → trích xuất ngay, không cần OCR
- *   - PDF quét (scanned) → text layer trống → trả về warning + cần OCR backend
- *
- * Cách dùng:
- *   const result = await extractPdfText(blob)
- *   if (result.isScanned) {
- *     // gửi lên backend OCR (Tesseract / Vision)
- *   } else {
- *     // dùng result.text trực tiếp
- *   }
+﻿/**
+ * pdfExtract.ts  Đọc nội dung văn bản từ PDF trực tiếp trong trình duyệt.
+ * Dùng `pdfjs` từ react-pdf (đã xử lý AMD/ESM interop đúng cách).
  */
 
+import { pdfjs } from 'react-pdf'
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url'
+
+// Vite ?url => URL chính xác tới file worker; pdfjs từ react-pdf => GlobalWorkerOptions tồn tại
+pdfjs.GlobalWorkerOptions.workerSrc = workerSrc
+
 export interface PdfExtractResult {
-  /** Toàn bộ văn bản đã trích xuất */
   text: string
-  /** Số trang */
   pageCount: number
-  /** Văn bản từng trang */
   pages: string[]
-  /** true nếu PDF là bản quét (không có text layer) */
   isScanned: boolean
-  /** Cảnh báo từ quá trình đọc */
   warnings: string[]
 }
 
-/** Kí tự tối thiểu/trang để coi là PDF có text (không phải bản quét) */
-const MIN_CHARS_PER_PAGE = 30
-
-async function loadPdfjsDist() {
-  // react-pdf exports pdfjsLib; ta import động để tránh bundle bloat khi không cần
-  const pdfjsLib = await import('pdfjs-dist')
-
-  // Worker setup — bắt buộc để PDF.js chạy được
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    // Dùng CDN worker cho đơn giản; production nên copy file local
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-  }
-
-  return pdfjsLib
-}
+const MIN_CHARS_PER_PAGE = 20
 
 /**
- * Trích xuất toàn bộ văn bản từ một PDF Blob / ArrayBuffer / URL.
+ * Trích xuất văn bản từ PDF Blob.
  */
-export async function extractPdfText(
-  source: Blob | ArrayBuffer | string,
-): Promise<PdfExtractResult> {
+export async function extractFromBlob(blob: Blob): Promise<PdfExtractResult> {
   const warnings: string[] = []
-  const pages: string[] = []
 
   try {
-    const pdfjsLib = await loadPdfjsDist()
+    const arrayBuffer = await blob.arrayBuffer()
 
-    // Chuẩn hoá source
-    let data: ArrayBuffer | string
-    if (source instanceof Blob) {
-      data = await source.arrayBuffer()
-    } else {
-      data = source
+    if (arrayBuffer.byteLength === 0) {
+      return { text: '', pageCount: 0, pages: [], isScanned: true, warnings: ['File rỗng'] }
     }
 
-    const loadingTask = pdfjsLib.getDocument(
-      typeof data === 'string' ? data : { data },
-    )
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
     const pdfDoc = await loadingTask.promise
     const numPages = pdfDoc.numPages
+    const pages: string[] = []
 
-    for (let i = 1; i <= numPages; i++) {
-      const page = await pdfDoc.getPage(i)
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdfDoc.getPage(pageNum)
       const textContent = await page.getTextContent()
 
-      const pageText = textContent.items
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((item: any) => ('str' in item ? item.str : ''))
-        .join(' ')
-        .replace(/\s{2,}/g, ' ')
-        .trim()
+      // Group items by row (Y coordinate, snapped to 3-pt grid)
+      // Then sort each row's items by X so columns come out left-to-right.
+      const rowMap = new Map<number, { str: string; x: number }[]>()
+      for (const item of textContent.items) {
+        if (!('str' in item)) continue
+        const ti = item as { str: string; transform: number[] }
+        if (!ti.str.trim()) continue
+        const rawY = ti.transform[5]
+        const rawX = ti.transform[4]
+        // Snap Y to nearest 3-point bucket so nearby items land in the same row
+        const yKey = Math.round(rawY / 3) * 3
+        if (!rowMap.has(yKey)) rowMap.set(yKey, [])
+        rowMap.get(yKey)!.push({ str: ti.str, x: rawX })
+      }
 
-      pages.push(pageText)
+      // Sort rows top-to-bottom (PDF Y axis: larger = higher on page)
+      const sortedYKeys = Array.from(rowMap.keys()).sort((a, b) => b - a)
+      const lines: string[] = []
+      for (const yKey of sortedYKeys) {
+        const items = rowMap.get(yKey)!.sort((a, b) => a.x - b.x)
+        // Join with appropriate spacing
+        let line = ''
+        let prevX = -Infinity
+        for (const { str, x } of items) {
+          const gap = line.length === 0 ? 0 : x - prevX
+          // Add extra space when there's a visible column gap (>10pt)
+          if (line.length > 0) line += gap > 10 ? '   ' : ' '
+          line += str
+          prevX = x + str.length * 6 // rough char advance
+        }
+        lines.push(line.trim())
+      }
+
+      pages.push(lines.join('\n'))
     }
 
-    const allText = pages.join('\n\n--- TRANG ' + pages.map((_, i) => i + 1).join(' ---\n\n--- TRANG ') + ' ---\n\n')
-      // Simpler join
-    const joinedText = pages.map((p, i) => `--- Trang ${i + 1} ---\n${p}`).join('\n\n')
-
-    const avgChars = pages.reduce((s, p) => s + p.length, 0) / Math.max(numPages, 1)
+    const totalChars = pages.reduce((s, p) => s + p.length, 0)
+    const avgChars = totalChars / Math.max(numPages, 1)
     const isScanned = avgChars < MIN_CHARS_PER_PAGE
 
     if (isScanned) {
-      warnings.push(
-        `PDF này là bản quét (trung bình ${Math.round(avgChars)} ký tự/trang). ` +
-        `Hệ thống sẽ chuyển sang chế độ OCR (Tesseract/Vision).`,
-      )
+      warnings.push(`PDF bản quét  ${Math.round(avgChars)} ký tự/trang trung bình. Cần OCR backend.`)
     }
 
-    return {
-      text: joinedText,
-      pageCount: numPages,
-      pages,
-      isScanned,
-      warnings,
-    }
+    const text = pages.map((p, i) => `=== Trang ${i + 1} ===\n${p}`).join('\n\n')
+    return { text, pageCount: numPages, pages, isScanned, warnings }
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    warnings.push(`Không thể đọc PDF: ${msg}`)
-    return { text: '', pageCount: 0, pages: [], isScanned: true, warnings }
+    console.error('[pdfExtract] Error:', err)
+    return { text: '', pageCount: 0, pages: [], isScanned: true, warnings: [`Lỗi đọc PDF: ${msg}`] }
   }
 }
 
-/**
- * Kiểm tra nhanh xem một PDF có text layer không (chỉ đọc trang đầu).
- */
-export async function checkPdfHasText(source: Blob): Promise<boolean> {
-  const result = await extractPdfText(source)
-  return !result.isScanned
-}
-
-/**
- * Trích xuất văn bản từ IndexedDB blob (dùng trong Documents page).
- */
-export async function extractFromBlob(blob: Blob): Promise<PdfExtractResult> {
-  if (!blob.type.includes('pdf')) {
-    return {
-      text: '(File không phải PDF — không thể trích xuất văn bản)',
-      pageCount: 0,
-      pages: [],
-      isScanned: false,
-      warnings: ['Chỉ hỗ trợ file PDF'],
-    }
+export async function extractPdfText(source: Blob | ArrayBuffer | string): Promise<PdfExtractResult> {
+  if (source instanceof Blob) return extractFromBlob(source)
+  if (source instanceof ArrayBuffer) return extractFromBlob(new Blob([source], { type: 'application/pdf' }))
+  try {
+    const resp = await fetch(source)
+    return extractFromBlob(await resp.blob())
+  } catch (err) {
+    return { text: '', pageCount: 0, pages: [], isScanned: true, warnings: [`Không tải được URL: ${err}`] }
   }
-  return extractPdfText(blob)
 }

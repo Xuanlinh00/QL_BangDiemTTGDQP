@@ -1,6 +1,39 @@
 version: '3.8'
 
 services:
+  mongodb:
+    image: mongo:7-jammy
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: tvu_documents
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tvu_network
+
+  mongo-express:
+    image: mongo-express:latest
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password
+      ME_CONFIG_MONGODB_URL: mongodb://admin:password@mongodb:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8081:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - tvu_network
+
   postgres:
     image: postgres:15-alpine
     environment:
@@ -52,6 +85,7 @@ services:
       - tvu_network
 
 volumes:
+  mongodb_data:
   postgres_data:
   pgadmin_data:
 

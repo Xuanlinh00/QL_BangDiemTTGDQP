@@ -98,13 +98,13 @@ _VIET_NAME_PATTERN = re.compile(
 )
 
 _MSSV_PATTERN = re.compile(
-    r"\b(DA|DT|DL|DC|DK|DH|DQ|DX|DV|DG|TC|LT|MH|ND|NQ|"
-    r"\d{7,10}|[A-Z]{2}\d{7,9})\b"
+    r"\b([A-Z]{1,3}\d{5,12}|\d{7,12})\b"
 )
 
 _SCORE_PATTERNS = [
-    re.compile(r"(?:điểm|đ)[:\s]+(\d+(?:[.,]\d{1,2})?)"),
-    re.compile(r"\b(\d(?:[.,]\d{1,2})?)\s*/\s*10\b"),
+    re.compile(r"(?:điểm|đ)[:\s]+(\d{1,2}(?:[.,]\d{1,2})?)"),
+    re.compile(r"\b(\d{1,2}(?:[.,]\d{1,2})?)\s*/\s*10\b"),
+    re.compile(r"\b(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)\b"),
 ]
 
 _DECISION_NO_PATTERN = re.compile(
@@ -127,95 +127,150 @@ _DATE_PATTERN = re.compile(
 def _parse_dsgd(text: str) -> tuple[List[Dict], Dict, List[str]]:
     """
     Extract student records from a score sheet.
-    Handles both tabular (fixed-column) and line-by-line formats.
+    Uses 3 progressive strategies so real-world PDF formats are handled.
     """
     records: List[Dict] = []
     warnings: List[str] = []
     meta: Dict[str, Any] = {}
 
-    # Try to detect class name
-    m = re.search(r"(?:Lớp|lớp)[:\s]+([A-Z0-9]{2,20})", text)
+    # ── Metadata ──────────────────────────────────────────────────────────
+    m = re.search(r"(?:Lớp|lớp|LỚP)[:\s]+([A-Z0-9]{2,20})", text)
     if m:
         meta["lop"] = m.group(1).strip()
 
-    # Try to detect subject
-    m = re.search(r"(?:Môn|môn|Học phần)[:\s]+(.{5,60}?)(?:\n|Mã)", text)
+    m = re.search(r"(?:Môn|môn|Học phần|HỌC PHẦN)[:\s]+(.{5,80}?)(?:\n|Mã|$)", text, re.MULTILINE)
     if m:
         meta["mon_hoc"] = m.group(1).strip()
 
-    lines = text.split("\n")
+    # Normalise: collapse multiple spaces to single space per line
+    lines = []
+    for raw_line in text.split("\n"):
+        normalised = re.sub(r"[ \t]+", " ", raw_line).strip()
+        if normalised:
+            lines.append(normalised)
 
-    # ── Strategy 1: Parse well-formatted table rows ──
-    # Row pattern: STT  HỌ TÊN  MSSV  LỚP  ĐIỂM  KẾT QUẢ
-    table_row = re.compile(
-        r"^(\d{1,3})\s+"                          # STT
-        r"(.{5,50}?)\s{2,}"                       # HO TEN (at least 2 spaces before MSSV)
-        r"([A-Z0-9]{6,12})\s+"                   # MSSV
-        r"([A-Z0-9]{2,15})\s+"                   # LOP
-        r"(\d(?:[.,]\d{1,2})?)"                  # DIEM
-        r"(?:\s+(\d(?:[.,]\d{1,2})?))?",         # DIEM_LAN2 optional
+    # ── Score helper ────────────────────────────────────────────────────────
+    SCORE_RE = re.compile(
+        r"\b(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)\b"
+    )
+
+    def find_scores(s: str) -> List[float]:
+        found = []
+        for mm in SCORE_RE.finditer(s):
+            val = _clean_score(mm.group(1))
+            if val is not None:
+                found.append(val)
+        return found
+
+    # ── Strategy 1: well-formatted tabular row ──────────────────────────────
+    # Accepts 1+ spaces between columns (not requiring 2+).
+    # STT  NAME  MSSV  CLASS  SCORE  [SCORE2]
+    S1 = re.compile(
+        r"^(\d{1,3})\s+"
+        r"([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
+        r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+"
+        r"(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
+        r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+){1,5})\s+"
+        r"([A-Z]{0,3}\d{5,12})\s+"
+        r"([A-Z]{2,4}\d{2}[A-Z0-9]{0,10})\s+"
+        r"(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)"
+        r"(?:\s+(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?))?",
         re.UNICODE,
     )
 
     matched_table = False
     for line in lines:
-        line = line.strip()
-        m = table_row.match(line)
+        m = S1.match(line)
         if m:
             matched_table = True
             score1 = _clean_score(m.group(5))
-            score2 = _clean_score(m.group(6)) if m.group(6) else None
-            ket_qua = "Đạt" if (score1 and score1 >= 5.0) else "Không đạt" if score1 is not None else None
+            score2 = _clean_score(m.group(6) or "")
+            ket_qua = "Đạt" if (score1 is not None and score1 >= 5.0) else \
+                      "Không đạt" if score1 is not None else None
             records.append(StudentRecord(
                 stt=m.group(1),
                 ho_ten=m.group(2).strip(),
                 mssv=m.group(3).strip(),
                 lop=m.group(4).strip(),
                 diem_qp=score1,
-                diem_lan2=score2,
+                diem_lan2=score2 if score2 else None,
                 ket_qua=ket_qua,
             ).model_dump())
 
-    # ── Strategy 2: fallback — find MSSV & name on same/adjacent lines ──
+    # ── Strategy 2: MSSV-anchor search ─────────────────────────────────────
+    # Find every MSSV, then look at ±2 adjacent lines for name + score.
     if not matched_table:
-        warnings.append("Không tìm thấy bảng điểm chuẩn; dùng fallback parser.")
+        warnings.append("Bảng chuẩn không khớp; dùng MSSV-anchor parser.")
         seen_mssv: set = set()
         for i, line in enumerate(lines):
             mssv_m = _MSSV_PATTERN.search(line)
             if not mssv_m:
                 continue
             mssv = mssv_m.group(0)
+            # Skip year-like tokens
+            if re.match(r"^(19|20)\d{2}$", mssv):
+                continue
             if mssv in seen_mssv:
                 continue
             seen_mssv.add(mssv)
 
-            # Search name in same line or previous line
-            ctx = " ".join(lines[max(0, i - 1): i + 2])
+            ctx = " ".join(lines[max(0, i - 1): i + 3])
             name_m = _VIET_NAME_PATTERN.search(ctx)
             ho_ten = name_m.group(0) if name_m else None
 
-            score: Optional[float] = None
-            for sp in _SCORE_PATTERNS:
-                sm = sp.search(ctx)
-                if sm:
-                    score = _clean_score(sm.group(1))
-                    break
+            # LOP: 2-4 uppercase + 2 digits + optional suffix
+            lop_m = re.search(r"\b([A-Z]{2,4}\d{2}[A-Z0-9]{0,10})\b", ctx)
+            lop = None
+            if lop_m and lop_m.group(1) != mssv:
+                lop = lop_m.group(1)
+
+            scores = find_scores(" ".join(lines[i: i + 3]))
+            score: Optional[float] = scores[0] if scores else None
+            score2: Optional[float] = scores[1] if len(scores) > 1 else None
 
             records.append(StudentRecord(
                 ho_ten=ho_ten,
                 mssv=mssv,
+                lop=lop,
                 diem_qp=score,
-                ket_qua="Đạt" if (score and score >= 5.0) else "Không đạt" if score is not None else None,
+                diem_lan2=score2,
+                ket_qua="Đạt" if (score is not None and score >= 5.0) else
+                        "Không đạt" if score is not None else None,
+            ).model_dump())
+
+    # ── Strategy 3: column-split heuristic ─────────────────────────────────
+    # For space-separated columns without MSSV-like tokens.
+    # Look for rows that start with a digit (STT) and contain a score.
+    if not records:
+        warnings.append("Dùng cột-heuristic parser.")
+        STT_LINE = re.compile(r"^(\d{1,3})\s+(.+)")
+        for line in lines:
+            m = STT_LINE.match(line)
+            if not m:
+                continue
+            rest = m.group(2)
+            scores = find_scores(rest)
+            if not scores:
+                continue
+            name_m = _VIET_NAME_PATTERN.search(rest)
+            mssv_m = _MSSV_PATTERN.search(rest)
+            records.append(StudentRecord(
+                stt=m.group(1),
+                ho_ten=name_m.group(0) if name_m else None,
+                mssv=mssv_m.group(0) if mssv_m else None,
+                diem_qp=scores[0],
+                diem_lan2=scores[1] if len(scores) > 1 else None,
+                ket_qua="Đạt" if scores[0] >= 5.0 else "Không đạt",
             ).model_dump())
 
     meta["total_records"] = len(records)
     if records:
-        scores = [r["diem_qp"] for r in records if r.get("diem_qp") is not None]
-        if scores:
-            meta["diem_trung_binh"] = round(sum(scores) / len(scores), 2)
-            meta["so_dat"] = sum(1 for s in scores if s >= 5.0)
-            meta["so_khong_dat"] = sum(1 for s in scores if s < 5.0)
-            meta["ty_le_dat"] = round(meta["so_dat"] / len(scores) * 100, 1)
+        scores_list = [r["diem_qp"] for r in records if r.get("diem_qp") is not None]
+        if scores_list:
+            meta["diem_trung_binh"] = round(sum(scores_list) / len(scores_list), 2)
+            meta["so_dat"] = sum(1 for s in scores_list if s >= 5.0)
+            meta["so_khong_dat"] = sum(1 for s in scores_list if s < 5.0)
+            meta["ty_le_dat"] = round(meta["so_dat"] / len(scores_list) * 100, 1)
 
     return records, meta, warnings
 

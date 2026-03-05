@@ -4,6 +4,8 @@ import logging
 
 from app.config import settings
 from app.routes import ocr, extract, reconcile
+from app.routes import documentai
+from app.database.mongodb import create_indexes, close_connection
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +30,7 @@ app.add_middleware(
 app.include_router(ocr.router, prefix="/ocr", tags=["OCR"])
 app.include_router(extract.router, prefix="/extract", tags=["Extract"])
 app.include_router(reconcile.router, prefix="/reconcile", tags=["Reconcile"])
+app.include_router(documentai.router, prefix="/documentai", tags=["Document AI"])
 
 @app.get("/health")
 async def health():
@@ -36,6 +39,12 @@ async def health():
 @app.on_event("startup")
 async def startup_event():
     logger.info("TVU GDQP-AN Worker API started")
+    await create_indexes()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_connection()
+    logger.info("MongoDB connection closed")
 
 if __name__ == "__main__":
     import uvicorn

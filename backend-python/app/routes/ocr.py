@@ -100,7 +100,38 @@ def _vision_api_ocr(image_bytes: bytes) -> str:
         return ""
 
 
-def _run_ocr(pdf_bytes: bytes, engine: str = "tesseract") -> str:
+def _vision_api_ocr_with_credentials(image_bytes: bytes) -> str:
+    """
+    Google Cloud Vision API dùng Application Default Credentials (service account).
+    Hỗ trợ cả chữ in lẫn chữ viết tay tiếng Việt.
+    """
+    try:
+        from google.cloud import vision as gv
+        client = gv.ImageAnnotatorClient()
+        image = gv.Image(content=image_bytes)
+        # DOCUMENT_TEXT_DETECTION tốt hơn TEXT_DETECTION cho dense text + handwriting
+        response = client.document_text_detection(
+            image=image,
+            image_context=gv.ImageContext(language_hints=["vi", "en"]),
+        )
+        if response.error.message:
+            raise RuntimeError(f"Vision API error: {response.error.message}")
+        return response.full_text_annotation.text or ""
+    except ImportError:
+        raise RuntimeError("google-cloud-vision chưa cài. Chạy: pip install google-cloud-vision")
+
+
+def _pdf_to_images_vision(pdf_bytes: bytes) -> list:
+    """Chuyển PDF → list PIL Images cho Vision API (300 DPI)."""
+    try:
+        from pdf2image import convert_from_bytes
+        return convert_from_bytes(pdf_bytes, dpi=300)
+    except Exception as exc:
+        logger.warning(f"pdf2image unavailable: {exc}")
+        return []
+
+
+
     """Main OCR dispatcher: tesseract → vision fallback."""
     images = _pdf_to_images(pdf_bytes)
 
@@ -161,7 +192,68 @@ async def process_document(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/process-text")
+@router.post("/process-handwriting")
+async def process_handwriting(
+    file: UploadFile = File(...),
+    document_id: str = Form(...),
+    document_type: str = Form("DSGD"),
+):
+    """
+    Upload PDF/ảnh có chữ viết tay → Google Cloud Vision API → trả raw text.
+    Dùng Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS).
+    """
+    task_id = f"ocr_{document_id}_{uuid.uuid4().hex[:8]}"
+    _tasks[task_id] = {"status": "processing", "progress": 0, "raw_text": ""}
+
+    try:
+        pdf_bytes = await file.read()
+        logger.info(f"Handwriting OCR: doc={document_id} size={len(pdf_bytes)}B")
+
+        _tasks[task_id]["progress"] = 10
+
+        # Chuyển PDF → ảnh
+        images = _pdf_to_images_vision(pdf_bytes)
+        if not images:
+            # File đã là ảnh (PNG/JPG) → dùng trực tiếp
+            images_bytes = [pdf_bytes]
+        else:
+            import io as _io
+            images_bytes = []
+            for img in images:
+                buf = _io.BytesIO()
+                img.save(buf, format="PNG")
+                images_bytes.append(buf.getvalue())
+
+        _tasks[task_id]["progress"] = 30
+
+        # OCR từng trang
+        pages_text: list[str] = []
+        for i, img_bytes in enumerate(images_bytes):
+            logger.info(f"Vision API page {i+1}/{len(images_bytes)}")
+            page_text = _vision_api_ocr_with_credentials(img_bytes)
+            pages_text.append(page_text)
+            _tasks[task_id]["progress"] = 30 + int(60 * (i + 1) / len(images_bytes))
+
+        raw_text = "\n\n--- TRANG {} ---\n\n".join(pages_text) if len(pages_text) > 1 else (pages_text[0] if pages_text else "")
+
+        _tasks[task_id].update({"status": "completed", "progress": 100, "raw_text": raw_text})
+        logger.info(f"Handwriting OCR done: task={task_id} chars={len(raw_text)}")
+
+        return {
+            "success": True,
+            "task_id": task_id,
+            "status": "completed",
+            "raw_text": raw_text,
+            "char_count": len(raw_text),
+            "page_count": len(images_bytes),
+        }
+    except Exception as exc:
+        logger.error(f"Handwriting OCR error: {exc}")
+        _tasks[task_id].update({"status": "error", "error": str(exc)})
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+
 async def process_text(request: OCRTextRequest):
     """Accept pre-extracted raw text; skip OCR step."""
     task_id = f"ocr_{request.document_id}_{uuid.uuid4().hex[:8]}"
