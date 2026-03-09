@@ -146,7 +146,7 @@ function makeHeaderBorder() {
  * Xuất dữ liệu đã trích xuất từ PDF ra Excel, giữ bố cục giống PDF gốc.
  *  - DSGD : bảng điểm sinh viên (STT / Họ tên / MSSV / Lớp / Điểm / Kết quả …)
  *  - QD   : quyết định (thông tin quyết định + danh sách đối tượng)
- *  - KeHoach: kế hoạch / lịch thi
+ *  - BieuMau: biểu mẫu hành chính
  */
 export function exportPdfFormatToExcel(
   records: {
@@ -156,7 +156,7 @@ export function exportPdfFormatToExcel(
     // QD fields
     so_quyet_dinh?: string; ngay_ky?: string; nguoi_ky?: string
     noi_dung?: string; don_vi?: string; doi_tuong?: string[]
-    // KeHoach fields
+    // BieuMau fields
     ngay?: string; tiet?: string; mon_hoc?: string
     giang_vien?: string; phong?: string
     [key: string]: unknown
@@ -187,7 +187,7 @@ export function exportPdfFormatToExcel(
   const TITLES: Record<string, string> = {
     DSGD: 'BẢNG ĐIỂM THI KẾT THÚC HỌC PHẦN',
     QD: 'QUYẾT ĐỊNH',
-    KeHoach: 'KẾ HOẠCH / LỊCH THI',
+    BieuMau: 'BIỂU MẪU',
   }
   aoa.push([TITLES[docType] ?? docType, ...Array(NUM_COLS - 1).fill(null)])
 
@@ -204,7 +204,7 @@ export function exportPdfFormatToExcel(
   const HEADERS: Record<string, string[]> = {
     DSGD:    ['STT', 'HỌ VÀ TÊN', 'MSSV', 'LỚP', 'ĐIỂM QP', 'LẦN 2', 'KẾT QUẢ', 'GHI CHÚ'],
     QD:      ['STT', 'HỌ VÀ TÊN', 'ĐƠN VỊ', 'SỐ QĐ', 'NGÀY KÝ', 'NGƯỜI KÝ', 'NỘI DUNG', 'GHI CHÚ'],
-    KeHoach: ['STT', 'NGÀY', 'TIẾT', 'MÔN HỌC', 'GIẢNG VIÊN', 'PHÒNG', 'LỚP', 'GHI CHÚ'],
+    BieuMau: ['STT', 'NGÀY', 'TIẾT', 'MÔN HỌC', 'GIẢNG VIÊN', 'PHÒNG', 'LỚP', 'GHI CHÚ'],
   }
   aoa.push(HEADERS[docType] ?? HEADERS['DSGD'])
 

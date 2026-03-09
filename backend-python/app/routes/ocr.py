@@ -3,7 +3,7 @@ OCR Service — Tesseract (local) + Google Cloud Vision API (cloud fallback).
 Supports Vietnamese scanned PDFs for academic documents:
   - DSGD  : Danh sách điểm / bảng điểm sinh viên
   - QD    : Quyết định tốt nghiệp / khen thưởng / kỷ luật
-  - KeHoach: Kế hoạch giảng dạy / lịch thi
+  - BieuMau: Biểu mẫu hành chính
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ class OCRRequest(BaseModel):
     file_path: str
     engine: str = "tesseract"          # "tesseract" | "vision"
     language: str = "vie+eng"
-    document_type: str = "DSGD"        # "DSGD" | "QD" | "KeHoach"
+    document_type: str = "DSGD"        # "DSGD" | "QD" | "BieuMau"
 
 
 class OCRTextRequest(BaseModel):
@@ -55,20 +55,73 @@ def _pdf_to_images(pdf_bytes: bytes):
     """Convert PDF bytes → list of PIL Images (requires pdf2image + poppler)."""
     try:
         from pdf2image import convert_from_bytes
-        return convert_from_bytes(pdf_bytes, dpi=300)
+        # 300 DPI → ~2480px wide for A4 — sufficient for Tesseract (no need for upscale later)
+        return convert_from_bytes(pdf_bytes, dpi=300, thread_count=2)
     except Exception as exc:
         logger.warning(f"pdf2image unavailable: {exc}")
         return []
 
 
+def _preprocess_image(img):
+    """
+    Preprocess a PIL Image before Tesseract OCR:
+      1. Grayscale
+      2. Upscale 2× if image is small (< 1800px wide) — Tesseract accuracy drops below ~200 DPI
+      3. CLAHE contrast enhancement — handles uneven lighting better than global histogram eq
+      4. Adaptive thresholding (binarise)
+      5. Mild morphological closing to reconnect broken strokes
+    Falls back to original image if cv2/PIL operations fail.
+    """
+    try:
+        import cv2
+        import numpy as np
+        arr = np.array(img)
+        gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY) if arr.ndim == 3 else arr
+
+        # Upscale only truly small images (thumbnails / low-DPI scans)
+        # 300 DPI source from pdf2image → ~2480px wide → skip upscale
+        h, w = gray.shape[:2]
+        if w < 1200:
+            scale = 1200.0 / w
+            gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+
+        # CLAHE — local contrast enhancement, good for faint handwriting
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+
+        # Adaptive threshold: block 31×31, C=15 — handles uneven lighting well
+        binary = cv2.adaptiveThreshold(
+            gray, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31, 15,
+        )
+        # Mild closing to reconnect broken strokes (horizontal 2-px, vertical 1-px)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        from PIL import Image as PILImage
+        return PILImage.fromarray(binary)
+    except Exception as exc:
+        logger.debug(f"Image preprocessing skipped: {exc}")
+        return img
+
+
 def _tesseract_ocr(images) -> str:
-    """Run Tesseract OCR on a list of PIL Images."""
+    """Run Tesseract OCR on a list of PIL Images with preprocessing."""
     try:
         import pytesseract
         pages: List[str] = []
         for img in images:
-            text = pytesseract.image_to_string(img, lang="vie+eng",
-                                               config="--psm 6 --oem 1")
+            processed = _preprocess_image(img)
+            # --psm 4: single-column of varying-size text — best for grade-sheet tables
+            #          (PSM 6 = uniform block, less accurate for multi-column tables)
+            # --oem 1: LSTM engine (most accurate for Vietnamese)
+            # preserve_interword_spaces 1: keep column gaps — our parser splits on 2+ spaces
+            text = pytesseract.image_to_string(
+                processed,
+                lang="vie+eng",
+                config="--psm 4 --oem 1 -c preserve_interword_spaces=1",
+            )
             pages.append(text)
         return "\n\n--- PAGE BREAK ---\n\n".join(pages)
     except Exception as exc:
@@ -131,23 +184,27 @@ def _pdf_to_images_vision(pdf_bytes: bytes) -> list:
         return []
 
 
-
-    """Main OCR dispatcher: tesseract → vision fallback."""
+def _run_ocr(pdf_bytes: bytes, engine: str = "tesseract") -> str:
+    """Main OCR dispatcher: tesseract (default) or Google Vision API."""
     images = _pdf_to_images(pdf_bytes)
 
     if not images:
-        # Treat as single-page image directly
+        # Treat as single-page image directly (PNG/JPEG input)
         if engine == "vision":
             return _vision_api_ocr(pdf_bytes)
         logger.warning("No images extracted from PDF; returning empty text.")
         return ""
 
     if engine == "vision":
-        buf = io.BytesIO()
-        images[0].save(buf, format="PNG")
-        return _vision_api_ocr(buf.getvalue())
+        # Process ALL pages, not just the first one
+        pages: List[str] = []
+        for img in images:
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            pages.append(_vision_api_ocr(buf.getvalue()))
+        return "\n\n--- PAGE BREAK ---\n\n".join(pages)
 
-    # Default: Tesseract
+    # Default: Tesseract with preprocessing
     return _tesseract_ocr(images)
 
 
@@ -234,7 +291,11 @@ async def process_handwriting(
             pages_text.append(page_text)
             _tasks[task_id]["progress"] = 30 + int(60 * (i + 1) / len(images_bytes))
 
-        raw_text = "\n\n--- TRANG {} ---\n\n".join(pages_text) if len(pages_text) > 1 else (pages_text[0] if pages_text else "")
+        if len(pages_text) > 1:
+            parts = [f"=== Trang {i + 1} ===\n{t}" for i, t in enumerate(pages_text)]
+            raw_text = "\n\n".join(parts)
+        else:
+            raw_text = pages_text[0] if pages_text else ""
 
         _tasks[task_id].update({"status": "completed", "progress": 100, "raw_text": raw_text})
         logger.info(f"Handwriting OCR done: task={task_id} chars={len(raw_text)}")
@@ -254,6 +315,8 @@ async def process_handwriting(
 
 
 
+
+@router.post("/process-text")
 async def process_text(request: OCRTextRequest):
     """Accept pre-extracted raw text; skip OCR step."""
     task_id = f"ocr_{request.document_id}_{uuid.uuid4().hex[:8]}"

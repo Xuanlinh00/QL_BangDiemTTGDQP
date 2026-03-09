@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   folder VARCHAR(100),
-  type VARCHAR(50), -- DSGD, QD, KeHoach
+  type VARCHAR(50), -- DSGD, QD, BieuMau
   file_path_s3 VARCHAR(500),
   pages INTEGER,
   ocr_status VARCHAR(50) DEFAULT 'Pending', -- Pending, Processing, Completed, Error
@@ -29,10 +29,10 @@ CREATE TABLE IF NOT EXISTS documents (
   error_message TEXT
 );
 
--- Bảng Students (Sinh viên)
+-- Bảng Students (Sinh viên - trích xuất từ bảng điểm)
 CREATE TABLE IF NOT EXISTS students (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code VARCHAR(50) UNIQUE NOT NULL,
+  code VARCHAR(50) NOT NULL,
   name VARCHAR(255) NOT NULL,
   class VARCHAR(50),
   cohort INTEGER,
@@ -71,14 +71,6 @@ CREATE TABLE IF NOT EXISTS decisions (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Bảng Decision Students (Sinh viên trong QĐ)
-CREATE TABLE IF NOT EXISTS decision_students (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  decision_id UUID REFERENCES decisions(id) ON DELETE CASCADE,
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Bảng Audit Logs (Lịch sử hoạt động)
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -93,23 +85,15 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Bảng Settings (Cài đặt hệ thống)
-CREATE TABLE IF NOT EXISTS settings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  key VARCHAR(100) UNIQUE NOT NULL,
-  value TEXT,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Bảng Settings đã được loại bỏ - cấu hình qua biến môi trường
 
 -- Tạo indexes để cải thiện hiệu suất
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(ocr_status, extract_status);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_at ON documents(uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
 CREATE INDEX IF NOT EXISTS idx_students_code ON students(code);
 CREATE INDEX IF NOT EXISTS idx_students_cohort ON students(cohort);
 CREATE INDEX IF NOT EXISTS idx_scores_student_id ON scores(student_id);
-CREATE INDEX IF NOT EXISTS idx_scores_status ON scores(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_number ON decisions(number);
 CREATE INDEX IF NOT EXISTS idx_decisions_cohort ON decisions(cohort);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
@@ -119,20 +103,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 INSERT INTO users (email, password_hash, name, role)
 VALUES (
   'admin@tvu.edu.vn',
-  '$2b$10$YIjlrHxWQJqw7Ym8.7.Ue.8.8.8.8.8.8.8.8.8.8.8.8.8.8.8.8.8', -- password (bcrypt hash)
+  '$2a$10$Tp83TVHh1qB7fPZRqDNoReywn/psqMbw0dclY7OW.eMll/7qP4OXm', -- password (bcrypt hash)
   'Admin TVU',
   'admin'
 ) ON CONFLICT (email) DO NOTHING;
-
--- Tạo settings mặc định
-INSERT INTO settings (key, value, description)
-VALUES
-  ('ocr_engine', 'tesseract', 'OCR engine: tesseract hoặc easyocr'),
-  ('ocr_language', 'vie', 'Ngôn ngữ OCR'),
-  ('ocr_confidence_threshold', '0.7', 'Ngưỡng độ tin cậy OCR'),
-  ('max_file_size_mb', '100', 'Kích thước file tối đa (MB)'),
-  ('retention_days', '365', 'Số ngày lưu trữ log')
-ON CONFLICT (key) DO NOTHING;
 
 -- Tạo view cho thống kê
 CREATE OR REPLACE VIEW v_document_stats AS
@@ -186,18 +160,6 @@ CREATE TRIGGER update_scores_updated_at BEFORE UPDATE ON scores
 CREATE TRIGGER update_decisions_updated_at BEFORE UPDATE ON decisions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- settings table removed — trigger no longer needed
 
--- Tạo role cho application
-CREATE ROLE app_user WITH LOGIN PASSWORD 'app_password';
-GRANT CONNECT ON DATABASE tvu_gdqp_admin TO app_user;
-GRANT USAGE ON SCHEMA public TO app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app_user;
-
--- Tạo role cho read-only
-CREATE ROLE app_readonly WITH LOGIN PASSWORD 'readonly_password';
-GRANT CONNECT ON DATABASE tvu_gdqp_admin TO app_readonly;
-GRANT USAGE ON SCHEMA public TO app_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_readonly;
+-- Roles should be created with secure passwords via environment variables\n-- Example: CREATE ROLE app_user WITH LOGIN PASSWORD :'APP_DB_PASSWORD';

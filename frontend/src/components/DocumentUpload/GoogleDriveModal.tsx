@@ -105,21 +105,21 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
-            <h2 className="text-xl font-bold text-gray-800">📁 Duyệt Google Drive</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+          <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white">📁 Duyệt Google Drive</h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl">✕</button>
           </div>
 
           <div className="p-6 space-y-4 overflow-auto flex-1">
             {/* Auth */}
             {!isAuthenticated ? (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-                <p className="text-blue-800 mb-3">Vui lòng đăng nhập Google Drive để tiếp tục</p>
+              <div className="bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-xl p-6 text-center">
+                <p className="text-primary-800 dark:text-primary-200 mb-3">Vui lòng đăng nhập Google Drive để tiếp tục</p>
                 <button
                   onClick={signInGoogle}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                  className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors"
                 >
                   🔐 Đăng nhập Google
                 </button>
@@ -147,19 +147,19 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                   <button
                     onClick={handleSearch}
                     disabled={isLoading}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                   >
                     {isLoading ? '⏳' : '🔍'} Tìm
                   </button>
                   {isSearchMode && (
                     <button
                       onClick={handleClearSearch}
-                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-gray-800 dark:text-white font-medium rounded-lg transition-colors"
                     >
                       ✕ Xóa tìm
                     </button>
@@ -168,14 +168,14 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
 
                 {/* Breadcrumb navigation */}
                 {!isSearchMode && folderPath.length > 0 && (
-                  <div className="flex items-center gap-1 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg overflow-x-auto">
+                  <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-slate-700/50 px-3 py-2 rounded-lg overflow-x-auto">
                     {folderPath.map((folder, idx) => (
                       <span key={folder.id} className="flex items-center gap-1 shrink-0">
                         {idx > 0 && <span className="text-gray-400 mx-1">›</span>}
                         <button
                           onClick={() => handleBreadcrumb(folder)}
-                          className={`hover:text-blue-600 hover:underline ${
-                            idx === folderPath.length - 1 ? 'font-semibold text-gray-900' : 'text-gray-600'
+                          className={`hover:text-primary-600 dark:hover:text-primary-400 hover:underline ${
+                            idx === folderPath.length - 1 ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'
                           }`}
                         >
                           {idx === 0 ? '🏠 ' : '📁 '}{folder.name}
@@ -199,9 +199,9 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                 )}
 
                 {/* Content area */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden">
                   {/* Toolbar */}
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                  <div className="bg-gray-50 dark:bg-slate-700/50 px-4 py-2 border-b border-gray-200 dark:border-slate-600 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -209,14 +209,14 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                         onChange={handleSelectAll}
                         className="w-4 h-4 cursor-pointer"
                       />
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">
                         {selectedFiles.length > 0 ? `Đã chọn ${selectedFiles.length}` : `${folders.length} thư mục, ${files.length} file`}
                       </span>
                     </div>
                     {selectedFiles.length > 0 && (
                       <button
                         onClick={handleImportSelected}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors"
+                        className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors"
                       >
                         Nhập {selectedFiles.length} file
                       </button>
@@ -225,12 +225,12 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
 
                   <div className="max-h-[50vh] overflow-y-auto">
                     {isLoading ? (
-                      <div className="p-8 text-center text-gray-500">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2" />
+                      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2" />
                         Đang tải...
                       </div>
                     ) : (folders.length === 0 && files.length === 0) ? (
-                      <div className="p-8 text-center text-gray-500">
+                      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                         Thư mục trống hoặc không tìm thấy file
                       </div>
                     ) : (
@@ -239,12 +239,12 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                         {folders.map(folder => (
                           <div
                             key={folder.id}
-                            className="px-4 py-3 border-b border-gray-100 hover:bg-blue-50 flex items-center gap-3 cursor-pointer group"
+                            className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 flex items-center gap-3 cursor-pointer group"
                             onClick={() => handleFolderClick(folder)}
                           >
                             <span className="text-xl">📁</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-blue-700 truncate group-hover:underline">
+                              <p className="text-sm font-semibold text-primary-700 dark:text-primary-400 truncate group-hover:underline">
                                 {folder.name}
                               </p>
                             </div>
@@ -256,7 +256,7 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                         {files.map(file => (
                           <div
                             key={file.id}
-                            className="px-4 py-3 border-b border-gray-100 hover:bg-gray-50 flex items-center gap-3"
+                            className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-3"
                           >
                             <input
                               type="checkbox"
@@ -266,8 +266,8 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                             />
                             <span className="text-lg shrink-0">{fileIcon(file.mimeType)}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 truncate">{file.name}</p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{file.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
                                 {file.size ? `${(parseInt(file.size) / 1024 / 1024).toFixed(2)} MB` : ''} 
                                 {file.createdTime ? ` • ${new Date(file.createdTime).toLocaleDateString('vi-VN')}` : ''}
                               </p>
@@ -299,14 +299,14 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={onClose}
-                    className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+                    className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-gray-800 dark:text-white font-medium rounded-lg transition-colors"
                   >
                     Đóng
                   </button>
                   <button
                     onClick={handleImportSelected}
                     disabled={selectedFiles.length === 0 || isLoading}
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                   >
                     Nhập {selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}
                   </button>
@@ -336,7 +336,7 @@ export default function GoogleDriveModal({ isOpen, onClose, onSelect }: GoogleDr
                   href={previewFile.webViewLink || `https://drive.google.com/file/d/${previewFile.id}/view`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition-colors"
+                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors"
                 >
                   🔗 Mở trong Drive
                 </a>

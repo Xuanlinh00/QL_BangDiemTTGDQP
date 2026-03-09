@@ -1,11 +1,7 @@
-/**
- * Documents Routes
- * Handles document metadata, OCR orchestration, and Excel export.
- * OCR/parsing is delegated to the Python worker (backend-python).
- */
-
 import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { validate, schemas } from '../middleware/validation.middleware'
+import { uploadLimiter } from '../middleware/rateLimiter.middleware'
 import axios from 'axios'
 import ExcelJS from 'exceljs'
 import path from 'path'
@@ -58,21 +54,18 @@ router.get('/', (_req: Request, res: Response) => {
 // POST /api/documents/register
 // Register a document after client-side upload
 // ─────────────────────────────────────────────
-router.post('/register', (req: Request, res: Response) => {
+router.post('/register', uploadLimiter, validate(schemas.registerDocument), (req: Request, res: Response) => {
   const { id, name, folder, type, source, uploaded_at } = req.body
-  if (!id || !name) {
-    res.status(400).json({ success: false, error: 'id and name are required' })
-    return
-  }
+  
   const doc: DocumentMeta = {
     id,
     name,
-    folder: folder || 'Upload',
-    type: type || 'DSGD',
-    source: source || 'local',
+    folder,
+    type,
+    source,
     ocr_status: 'Pending',
     extract_status: 'Pending',
-    uploaded_at: uploaded_at || new Date().toISOString().split('T')[0],
+    uploaded_at,
   }
   _docs.set(id, doc)
   res.json({ success: true, data: doc })

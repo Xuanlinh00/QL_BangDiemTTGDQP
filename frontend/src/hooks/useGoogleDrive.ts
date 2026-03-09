@@ -119,9 +119,11 @@ export function useGoogleDrive() {
   // ── Token handler ──
   const handleTokenReceived = useCallback(async (token: string, expiresIn?: string) => {
     accessTokenRef.current = token
-    sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
+    // ✅ FIX: Lưu vào localStorage thay vì sessionStorage để persist qua page refresh
+    localStorage.setItem(TOKEN_STORAGE_KEY, token)
     if (expiresIn) {
-      sessionStorage.setItem(TOKEN_EXPIRY_KEY, (Date.now() + parseInt(expiresIn) * 1000).toString())
+      const expiryTime = Date.now() + parseInt(expiresIn) * 1000
+      localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
     }
     if (window.gapi?.client) {
       window.gapi.client.setToken({ access_token: token })
@@ -185,8 +187,9 @@ export function useGoogleDrive() {
     }
     if (window.gapi?.client) window.gapi.client.setToken(null)
     accessTokenRef.current = null
-    sessionStorage.removeItem(TOKEN_STORAGE_KEY)
-    sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+    // ✅ FIX: Clear từ localStorage
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
     setIsAuthenticated(false); setUserEmail(null)
     setFiles([]); setFolders([]); setAllFilesCache([])
     setCurrentFolder(null); setFolderPath([])
@@ -406,14 +409,17 @@ export function useGoogleDrive() {
   // ── Restore token ──
   useEffect(() => {
     if (isAuthenticated) return
-    const savedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY)
-    const savedExpiry = sessionStorage.getItem(TOKEN_EXPIRY_KEY)
+    // ✅ FIX: Đọc từ localStorage thay vì sessionStorage
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+    const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
     if (savedToken) {
       if (savedExpiry && Date.now() > parseInt(savedExpiry)) {
-        sessionStorage.removeItem(TOKEN_STORAGE_KEY)
-        sessionStorage.removeItem(TOKEN_EXPIRY_KEY)
+        // Token đã hết hạn, xóa đi
+        localStorage.removeItem(TOKEN_STORAGE_KEY)
+        localStorage.removeItem(TOKEN_EXPIRY_KEY)
         return
       }
+      // Token còn hạn, restore
       handleTokenReceived(savedToken)
     }
   }, [isAuthenticated, handleTokenReceived])

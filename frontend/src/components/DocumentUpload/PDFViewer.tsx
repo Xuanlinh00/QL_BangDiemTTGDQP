@@ -106,7 +106,7 @@ export default function PDFViewer({ blob, embedUrl, className = '', onTextExtrac
           onLoadError={onLoadError}
           loading={
             <div className="flex flex-col items-center justify-center h-40 gap-3 text-gray-500">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500" />
               <p className="text-sm">Đang tải PDF...</p>
             </div>
           }

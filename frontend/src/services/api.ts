@@ -30,4 +30,95 @@ api.interceptors.response.use(
   }
 )
 
+// ═══════════════════════════════════════════
+// Decisions API
+// ═══════════════════════════════════════════
+export const decisionsApi = {
+  list: (year?: string) => api.get('/decisions', { params: year ? { year } : {} }),
+  upload: (files: File[], year: string) => {
+    const form = new FormData()
+    form.append('year', year)
+    files.forEach(f => form.append('files', f))
+    return api.post('/decisions/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  getFileUrl: (id: string) => `${API_URL}/decisions/${id}/file`,
+  update: (id: string, data: Record<string, unknown>) => api.put(`/decisions/${id}`, data),
+  delete: (id: string) => api.delete(`/decisions/${id}`),
+  listFolders: () => api.get('/decisions/folders'),
+  createFolder: (name: string) => api.post('/decisions/folders', { name, type: 'year' }),
+  deleteFolder: (id: string) => api.delete(`/decisions/folders/${id}`),
+  renameFolder: (id: string, name: string) => api.put(`/decisions/folders/${id}`, { name }),
+}
+
+// ═══════════════════════════════════════════
+// Data API (Students + Scores)
+// ═══════════════════════════════════════════
+export const studentsApi = {
+  list: () => api.get('/data/students'),
+  create: (data: Record<string, unknown>) => api.post('/data/students', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/data/students/${id}`, data),
+  delete: (id: string) => api.delete(`/data/students/${id}`),
+}
+
+export const scoresApi = {
+  list: () => api.get('/data/scores'),
+  create: (data: Record<string, unknown>) => api.post('/data/scores', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/data/scores/${id}`, data),
+  delete: (id: string) => api.delete(`/data/scores/${id}`),
+}
+
+// ═══════════════════════════════════════════
+// Reports API
+// ═══════════════════════════════════════════
+export const reportsApi = {
+  list: () => api.get('/reports'),
+  create: (data: Record<string, unknown>) => api.post('/reports', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/reports/${id}`, data),
+  delete: (id: string) => api.delete(`/reports/${id}`),
+}
+
+// ═══════════════════════════════════════════
+// Settings API
+// ═══════════════════════════════════════════
+export const settingsApi = {
+  list: () => api.get('/settings'),
+  create: (data: Record<string, unknown>) => api.post('/settings', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/settings/${id}`, data),
+  delete: (id: string) => api.delete(`/settings/${id}`),
+  reset: () => api.post('/settings/reset'),
+}
+
+// ═══════════════════════════════════════
+// Document Store API (Documents page)
+// ═══════════════════════════════════════
+export const docstoreApi = {
+  list: () => api.get('/docstore'),
+  upload: (files: File[], meta: Record<string, string>) => {
+    const form = new FormData()
+    Object.entries(meta).forEach(([k, v]) => form.append(k, v))
+    files.forEach(f => form.append('files', f))
+    return api.post('/docstore/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  saveGDrive: (data: Record<string, unknown>) => api.post('/docstore/gdrive', data),
+  getFileUrl: (id: string) => `${API_URL}/docstore/${id}/file`,
+  update: (id: string, data: Record<string, unknown>) => api.put(`/docstore/${id}`, data),
+  delete: (id: string) => api.delete(`/docstore/${id}`),
+  // Student records
+  listStudentRecords: (docId?: string) => api.get('/docstore/student-records', { params: docId ? { docId } : {} }),
+  bulkSaveStudentRecords: (docId: string, docName: string, records: Record<string, unknown>[]) =>
+    api.post('/docstore/student-records/bulk', { docId, docName, records }),
+  deleteStudentRecords: (docId: string) => api.delete(`/docstore/student-records/${docId}`),
+}
+
+// ═══════════════════════════════════════════
+// Activities API (Center activities on Dashboard)
+// ═══════════════════════════════════════════
+export const activitiesApi = {
+  list: () => api.get('/activities'),
+  create: (data: Record<string, unknown>) => api.post('/activities', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/activities/${id}`, data),
+  delete: (id: string) => api.delete(`/activities/${id}`),
+  seed: () => api.post('/activities/seed'),
+}
+
 export default api

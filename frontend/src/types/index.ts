@@ -20,7 +20,7 @@ export interface Document {
   id: string
   name: string
   folder: string
-  type: 'DSGD' | 'QD' | 'KeHoach'
+  type: 'DSGD' | 'QD' | 'BieuMau'
   pages: number
   ocr_status: 'Pending' | 'Processing' | 'Completed' | 'Error'
   extract_status: 'Pending' | 'Processing' | 'Completed' | 'Error'
@@ -28,27 +28,6 @@ export interface Document {
   uploaded_by: string
   uploaded_at: string
   updated_at: string
-}
-
-export interface Student {
-  id: string
-  code: string
-  name: string
-  class: string
-  cohort: number
-  dob?: string
-  extracted_from_doc_id: string
-}
-
-export interface Score {
-  id: string
-  student_id: string
-  subject_code: string
-  subject_name: string
-  score: number
-  grade: 'A' | 'B' | 'C' | 'D' | 'F'
-  status: 'Dat' | 'Hong' | 'HocLai'
-  extracted_from_doc_id: string
 }
 
 export interface Decision {
@@ -67,10 +46,8 @@ export interface DashboardMetrics {
   total_documents: number
   total_pages: number
   ocr_completed_percent: number
-  total_students: number
-  total_scores: number
   documents_pending: number
   documents_error: number
-  decisions_linked: number
+  decisions_count: number
   alerts: string[]
 }

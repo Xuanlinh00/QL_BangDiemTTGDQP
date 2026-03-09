@@ -53,7 +53,7 @@ interface Props {
   pdfUrl: string | null
   docName: string
   docId: string
-  docType: 'DSGD' | 'QD' | 'KeHoach'
+  docType: 'DSGD' | 'QD' | 'BieuMau'
   /** Raw OCR text already extracted client-side (optional).
    *  When provided, the component skips OCR and goes straight to extraction. */
   rawText?: string
@@ -168,19 +168,182 @@ function recordsToApiShape(records: StudentRecord[]) {
 
 // ── OCR text normalizer: sửa lỗi nhận dạng phổ biến của Tesseract ────────────
 function normalizeOcrText(raw: string): string {
-  return raw
-    .replace(/\r/g, '')
-    // Ghép số bị tách bởi 1 khoảng trắng (OCR artifact): "7 5" → "75"
-    // KHÔNG ghép khi cách 2+ dấu cách (phân cách cột bảng)
-    .replace(/(\d) (\d)/g, '$1$2')
-    // Sửa dấu thập phân bị tách: "9 . 8" hoặc "9,8" → "9.8"
-    .replace(/(\d)\s*[.,]\s*(\d)/g, '$1.$2')
-    // Sửa O/o/Q → 0 khi kẹp giữa 2 chữ số (OCR nhầm 0 vs O)
-    .replace(/(\d)[OoQq](\d)/g, '$10$2')
-    // Sửa l/I/| → 1 khi kẹp giữa 2 chữ số
-    .replace(/(\d)[lI|](\d)/g, '$11$2')
-    // Xóa ký tự nhiễu đầu dòng từ Tesseract
-    .replace(/^[\[\]{}|\\<>@#$%^&*~`]+/gm, '')
+  let text = raw.replace(/\r/g, '')
+  // Sửa O/o/Q → 0 khi kẹp giữa 2 chữ số (OCR nhầm 0 vs O)
+  text = text.replace(/(\d)[OoQq](\d)/g, '$10$2')
+  // Sửa l/I/| → 1 khi kẹp giữa 2 chữ số
+  text = text.replace(/(\d)[lI|](\d)/g, '$11$2')
+  // Sửa dấu thập phân bị tách: "9 . 8" → "9.8"
+  // Chú ý: KHÔNG áp dụng khi → tạo thành ngày/tháng (dd/mm)
+  text = text.replace(/(\d)\s*[.,]\s*(\d)/g, (m, a, b) => {
+    // Nếu là phân cách ngày: ký tự trước là '/' hoặc '\n' → giữ nguyên
+    return `${a}.${b}`
+  })
+  // Ghép chuỗi số bị tách 1–2 cách TRONG CÙNG 1 DÒN để khôi phục MSSV
+  // NHƯNG chỉ ghép khi kết quả KHÔNG phải ngày sinh (không có dấu / ở kề bên)
+  // và kết quả có độ dài hợp lệ MSSV (7-10 chữ số)
+  // Dùng chiến lược: ghép trong mỗi «cụm số»  (không qua dấu / - khoảng cách lớn)
+  text = text.replace(/\b(\d) {1,2}(\d)/g, (full, a, b, offset, src) => {
+    // Không ghép nếu xung quanh có ký tự / hoặc - (dấu ngày tháng)
+    const before = src[offset - 1] ?? ''
+    const after  = src[offset + full.length] ?? ''
+    if (before === '/' || before === '-' || after === '/' || after === '-') return full
+    return `${a}${b}`
+  })
+  // Xóa ký tự nhiễu đầu dòng từ Tesseract
+  text = text.replace(/^[\[\]{}|\\<>@#$%^&*~`]+/gm, '')
+  return text
+}
+
+// ── Primary parser: column-split + token-fallback ─────────────────────────────
+// Strategy:
+//  Pass 1 – split line on 2+ spaces → structured column parse
+//  Pass 2 – if MSSV not found in cols → scan all single-space tokens
+//            (handles tight-table PDFs where column gaps < 0.45 em)
+//  Supports both column orders:
+//   A) STT  NAME  MSSV  CLASS  SCORES
+//   B) STT  MSSV  NAME  DATE  GENDER  SCORES  (TVU "Danh Sach Ghi Diem")
+function parseRecordsFromColumnText(
+  rawText: string,
+  docType: string,
+): { records: StudentRecord[]; meta: ExtractMeta } | null {
+  if (docType !== 'DSGD') return null
+
+  // TVU MSSV: 9-digit starting with 1 (110122001), prefixed (DA210001), or 7-10 plain digits
+  const MSSV_RE      = /^([A-Z]{0,3}\d{5,12}|1\d{8}|\d{7,10})$/
+  const SCORE_RE_TOK = /^(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)$/
+  const SCORE_INLINE = /\b(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)\b/g
+  const LOP_RE       = /^[A-Z]{1,4}\d{2}[A-Z][A-Z0-9]{0,10}$/
+  const STT_RE       = /^\d{1,3}$/
+  const DATE_RE_TOK  = /^\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?$/
+  const DATE_INLINE  = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/
+  const VIET_CAP     = /^[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]/
+
+  // Extract doc-level metadata
+  // "Nhóm/Lớp: (01 - 02)/DA22TTA"  OR  "Lớp: DA21TYC"
+  const lopMeta = (
+    rawText.match(/(?:Nhóm\/Lớp|NHÓM\/LỚP)[\s:()\d\- ]*\/\s*([A-Z0-9]{4,20})/i)
+    ?? rawText.match(/(?:MÃ\s+LỚP|LỚP)[:\s]+([A-Z0-9]{2,20})/i)
+  )?.[1]?.trim() ?? ''
+  const monMeta = rawText.match(/(?:Học phần|HỌC PHẦN|MÔN)[:\s]+(.{5,80}?)(?:\n|$)/im)?.[1]?.trim() ?? ''
+
+  function isNameTok(tok: string): boolean {
+    if (!VIET_CAP.test(tok)) return false
+    if (MSSV_RE.test(tok) || LOP_RE.test(tok) || DATE_RE_TOK.test(tok)) return false
+    if (SCORE_RE_TOK.test(tok.replace(',', '.'))) return false
+    if (STT_RE.test(tok)) return false
+    if (/^(Nam|Nữ|Phái|KT|TB|QT|Phòng|TT|HP|Lần|QP|AN|GDQP|CBGD|CBCT|ĐT|ĐH|CĐ)$/i.test(tok)) return false
+    return true
+  }
+
+  const lines = rawText.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(l => l.length > 1)
+  const records: StudentRecord[] = []
+  const seenMssv = new Set<string>()
+
+  for (const line of lines) {
+    if (/^(STT|TT\b|HỌ\b|TÊN\b|MSSV|MÃ\s*SV|LỚP|ĐIỂM|KẾT|GHI|===|TRANG|BẢNG|DANH|TRƯỜNG|BỘ|KHOA|MÔN|MÃ\b|NGÀY|HỘI\s*ĐỒNG)/i.test(line)) continue
+
+    // Pass 1: 2+-space column split
+    const cols = line.split(/\s{2,}/).map(c => c.trim()).filter(Boolean)
+    let mssvIdx = -1
+    for (let i = 0; i < cols.length; i++) {
+      if (MSSV_RE.test(cols[i]) && !/^(19|20)\d{2}$/.test(cols[i])) { mssvIdx = i; break }
+    }
+
+    // Pass 2: single-space token fallback
+    let mssvViaToken = ''
+    if (mssvIdx < 0) {
+      for (const tok of line.split(/\s+/)) {
+        if (MSSV_RE.test(tok) && !/^(19|20)\d{2}$/.test(tok)) {
+          if (tok.length < 7 && /^\d+$/.test(tok)) continue
+          mssvViaToken = tok; break
+        }
+      }
+      if (!mssvViaToken) continue
+    }
+
+    const mssv = mssvIdx >= 0 ? cols[mssvIdx] : mssvViaToken
+    if (seenMssv.has(mssv)) continue
+    seenMssv.add(mssv)
+
+    let ho_ten = '', lop = lopMeta
+    const allScores: number[] = []
+    let ghi_chu = ''
+
+    if (mssvIdx >= 0) {
+      const hasStt = STT_RE.test(cols[0])
+      const ns = hasStt ? 1 : 0
+      ho_ten = cols.slice(ns, mssvIdx).filter(isNameTok).join(' ').trim()
+      if (!ho_ten) {
+        const parts: string[] = []
+        for (let i = mssvIdx + 1; i < cols.length; i++) {
+          if (isNameTok(cols[i])) parts.push(cols[i])
+          else if (!DATE_RE_TOK.test(cols[i])) break
+        }
+        ho_ten = parts.join(' ').trim()
+      }
+      for (let i = mssvIdx + 1; i < cols.length; i++) {
+        if (SCORE_RE_TOK.test(cols[i].replace(',', '.'))) {
+          const n = parseFloat(cols[i].replace(',', '.'))
+          if (!isNaN(n)) allScores.push(n)
+        }
+      }
+      if (!lop) for (const c of cols) { if (LOP_RE.test(c) && c !== mssv) { lop = c; break } }
+      if (allScores.length >= 3) {
+        for (let i = cols.length - 1; i > mssvIdx; i--) {
+          const c = cols[i]
+          if (!SCORE_RE_TOK.test(c.replace(',', '.')) && !DATE_RE_TOK.test(c) && isNaN(parseFloat(c))) { ghi_chu = c; break }
+        }
+      }
+    } else {
+      const mssvPos   = line.indexOf(mssv)
+      const beforeTxt = line.slice(0, mssvPos).replace(/^\s*\d{1,3}[\s.)]*/, '').trim()
+      const afterTxt  = line.slice(mssvPos + mssv.length).trim()
+      ho_ten = beforeTxt.split(/\s+/).filter(isNameTok).join(' ')
+      if (!ho_ten) {
+        const dateM  = afterTxt.match(DATE_INLINE)
+        SCORE_INLINE.lastIndex = 0
+        const scoreM = SCORE_INLINE.exec(afterTxt)
+        const cut    = Math.min(
+          dateM  ? (dateM.index ?? Infinity) : Infinity,
+          scoreM ? (scoreM.index ?? Infinity) : Infinity,
+        )
+        const nameSec = isFinite(cut) ? afterTxt.slice(0, cut) : afterTxt
+        ho_ten = nameSec.split(/\s+/).filter(isNameTok).join(' ')
+      }
+      SCORE_INLINE.lastIndex = 0
+      let sm: RegExpExecArray | null
+      while ((sm = SCORE_INLINE.exec(afterTxt)) !== null) {
+        const pre = afterTxt[sm.index - 1]
+        if (pre === '/' || pre === '-') continue
+        const n = parseFloat(sm[1].replace(',', '.'))
+        if (!isNaN(n)) allScores.push(n)
+      }
+      if (!lop) for (const t of line.split(/\s+/)) { if (LOP_RE.test(t) && t !== mssv) { lop = t; break } }
+    }
+
+    let dq: number | null = null, dl: number | null = null
+    if (allScores.length >= 3)       dq = allScores[allScores.length - 1]
+    else if (allScores.length === 2) { dq = allScores[0]; if (allScores[1] > 0) dl = allScores[1] }
+    else if (allScores.length === 1)  dq = allScores[0]
+
+    records.push({
+      stt:       mssvIdx >= 0 && STT_RE.test(cols[0]) ? cols[0] : String(records.length + 1),
+      ho_ten:    ho_ten.trim(),
+      mssv,
+      lop,
+      diem_qp:   dq !== null ? String(dq) : '',
+      diem_lan2: dl !== null ? String(dl) : '',
+      ket_qua:   dq !== null ? (dq >= 5 ? 'Đạt' : 'Không đạt') : '',
+      ghi_chu,
+    })
+  }
+
+  if (records.length === 0) return null
+  const meta = computeMeta(records)
+  if (lopMeta) meta.lop = lopMeta
+  if (monMeta) meta.mon_hoc = monMeta
+  return { records, meta }
 }
 
 // ── Client-side parser (fallback when Python worker is unreachable) ──────────
@@ -198,10 +361,10 @@ function parseRecordsClientSide(
     .map(l => l.trim())
     .filter(l => l.length > 1)
 
-  // MSSV TVU: 9 chữ số bắt đầu bằng 1 (vd: 110122001)
-  // Hoặc có thể có prefix chữ hoa (DA210001, DT22001...)
-  // Cho phép OCR nhầm O↔0, l↔1 nên dùng [0-9OIl] sau ký tự đầu
-  const MSSV_RE = /\b([A-Z]{1,3}[0-9]{5,10}|1[0-9]{8}|[0-9]{8,10})\b/g
+  // MSSV TVU: 9 chữ số bắt đầu bằng 1 (vd: 110122001), hoặc prefixed (DA210001)
+  // Không khớp năm sinh (2004, 1990...) hay ngày sinh (27/10/2004)
+  // min 7 digits để tránh STT / số phòng
+  const MSSV_RE = /\b([A-Z]{1,3}\d{5,10}|1\d{8}|\d{7,10})\b/g
 
   // Vietnamese name: 2-5 capitalised words (ASCII + accented)
   const VIET_CAP =
@@ -337,8 +500,23 @@ function parseRecordsByRowNumber(
     // Tìm MSSV trực tiếp bằng regex trong cả dòng (không phụ thuộc vào tách token)
     const mssvMatch = MSSV_ROW_RE.exec(rest)
     const mssv = mssvMatch?.[1] ?? tokens.find(t => /^[A-Za-z0-9]{5,15}$/.test(t) && !/^[A-Za-z]{1,3}$/.test(t)) ?? ''
-    // Tên: token có ≥2 chữ cái và không phải toàn số, không phải mssv
-    const ho_ten = tokens.find(t => /[a-zA-ZÀ-ỹ]{2}/.test(t) && !/^\d+$/.test(t) && t !== mssv) ?? ''
+
+    // Tên: lấy phần văn bản TRƯỚC MSSV trong dòng (đáng tin hơn là dùng token)
+    let ho_ten = ''
+    if (mssv) {
+      const mssvIdx = rest.indexOf(mssv)
+      if (mssvIdx > 0) {
+        // Lấy phần trước MSSV, loại bỏ STT đầu dòng (1-3 chữ số)
+        ho_ten = rest.slice(0, mssvIdx).replace(/^\d{1,3}[\s.)\-]*/, '').trim()
+      }
+    }
+    if (!ho_ten) {
+      ho_ten = tokens.find(t => /[a-zA-ZÀ-ỹ]{2}/.test(t) && !/^\d+$/.test(t) && t !== mssv) ?? ''
+    }
+
+    // Lớp: dạng 2-4 chữ hoa + 2 số + ít nhất 1 chữ hoa (vd: DA21TYC, DT20A, CC21A2)
+    const lop = tokens.find(t => /^[A-Z]{1,4}\d{2}[A-Z][A-Z0-9]*$/.test(t) && t !== mssv) ?? ''
+
     const dq = scores[0] ?? null
     const dl = scores[1] ?? null
 
@@ -346,7 +524,7 @@ function parseRecordsByRowNumber(
       stt: String(sttNum),
       ho_ten,
       mssv,
-      lop: '',
+      lop,
       diem_qp:  dq !== null ? String(dq) : '',
       diem_lan2: dl !== null ? String(dl) : '',
       ket_qua:  dq !== null ? (dq >= 5 ? 'Đạt' : 'Không đạt') : '',
@@ -383,7 +561,7 @@ async function blobToImageDataUrl(blob: Blob): Promise<string> {
     }
 
     if (pageCanvases.length === 0) throw new Error('no pages')
-    if (pageCanvases.length === 1) return pageCanvases[0].toDataURL('image/png')
+    if (pageCanvases.length === 1) return pageCanvases[0].toDataURL('image/jpeg', 0.85)
 
     // Ghép tất cả trang theo chiều dọc
     const totalWidth  = Math.max(...pageCanvases.map(c => c.width))
@@ -394,10 +572,55 @@ async function blobToImageDataUrl(blob: Blob): Promise<string> {
     const mCtx = merged.getContext('2d')!
     let y = 0
     for (const c of pageCanvases) { mCtx.drawImage(c, 0, y); y += c.height }
-    return merged.toDataURL('image/png')
+    return merged.toDataURL('image/jpeg', 0.85)
   } catch {
     return URL.createObjectURL(blob)
   }
+}
+
+// ── Canvas preprocessing for handwritten/scanned PDFs ────────────────────────
+// Uses Otsu's adaptive thresholding — much better than fixed thresholds for
+// faint or uneven handwriting on varied paper backgrounds.
+function preprocessCanvasForOCR(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  const d = imageData.data
+  const n = d.length >>> 2  // pixel count
+
+  // Step 1: grayscale + build histogram
+  const gray = new Uint8Array(n)
+  const hist = new Uint32Array(256)
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2])
+    gray[j] = g
+    hist[g]++
+  }
+
+  // Step 2: Otsu's method — find threshold that maximises inter-class variance
+  let sumAll = 0
+  for (let i = 0; i < 256; i++) sumAll += i * hist[i]
+  let best = 0, thresh = 128, sumB = 0, wB = 0
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]
+    if (wB === 0) continue
+    const wF = n - wB
+    if (wF === 0) break
+    sumB += t * hist[t]
+    const mB = sumB / wB
+    const mF = (sumAll - sumB) / wF
+    const between = wB * wF * (mB - mF) ** 2
+    if (between > best) { best = between; thresh = t }
+  }
+
+  // Step 3: binarise — pixels below Otsu threshold → black (ink), above → white (paper)
+  // Add a small bias (+10) so faint ink strokes are kept as black
+  const finalThresh = Math.min(thresh + 10, 240)
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    const v = gray[j] <= finalThresh ? 0 : 255
+    d[i] = d[i + 1] = d[i + 2] = v
+  }
+  ctx.putImageData(imageData, 0, 0)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -437,7 +660,13 @@ export default function OCRReviewModal({
   // ── Step 2: Extract data from OCR text — client-side only ──────────────
   const runExtract = useCallback(async (text: string) => {
     setStep('loading')
-    const cs = parseRecordsClientSide(text, docType) ?? parseRecordsByRowNumber(text)
+    // Try parsers from most-structured to least-structured:
+    // 1. Column-split: best for text-layer PDFs (splits on 2+ spaces from pdfExtract)
+    // 2. MSSV-anchor: good for mixed-format text
+    // 3. Row-number: fallback for heavily garbled OCR
+    const cs = parseRecordsFromColumnText(text, docType)
+      ?? parseRecordsClientSide(text, docType)
+      ?? parseRecordsByRowNumber(text)
     if (cs && cs.records.length > 0) {
       setRecords(cs.records)
       setMeta(cs.meta)
@@ -585,7 +814,9 @@ export default function OCRReviewModal({
       if (!result.isScanned && result.text.trim().length > 20) {
         setRawOcrText(result.text)
         setReadProgress(`✅ Text layer: ${result.pageCount} trang · ${result.text.length} ký tự`)
-        const parsed = parseRecordsClientSide(result.text, docType) ?? parseRecordsByRowNumber(result.text)
+        const parsed = parseRecordsFromColumnText(result.text, docType)
+          ?? parseRecordsClientSide(result.text, docType)
+          ?? parseRecordsByRowNumber(result.text)
         if (parsed && parsed.records.length > 0) {
           setRecords(parsed.records)
           setMeta(parsed.meta)
@@ -595,44 +826,56 @@ export default function OCRReviewModal({
       }
     } catch { /* tiếp tục */ }
 
-    // 2. PDF ảnh quét → Tesseract (chỉ 2 trang đầu, JPEG để nhanh hơn)
+    // 2. PDF ảnh quét → Tesseract
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let tessWorker: any = null
     try {
-      setReadProgress('🔍 PDF ảnh quét — OCR trang 1 (vui lòng chờ ~20 giây)...')
-      toast('Đang OCR... vui lòng chờ.', { icon: '⏳', duration: 60000 })
+      setReadProgress('🔍 PDF ảnh quét — OCR (vui lòng chờ)...')
+      toast('Đang OCR... mỗi trang ~10–15 giây.', { icon: '⏳', duration: 120000 })
       const Tesseract = await import('tesseract.js')
       const { pdfjs } = await import('react-pdf')
       const ab = await blob.arrayBuffer()
       const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab) }).promise
-      const totalPages = Math.min(pdf.numPages, 2)
+      const totalPages = Math.min(pdf.numPages, 5)  // max 5 pages — balance speed vs coverage
       const pageTexts: string[] = []
 
-      // currentPageRef tracks the active page for the shared worker logger
       let currentPage = 1
 
-      // createWorker (not Tesseract.recognize) so workerBlobURL/workerPath are honoured.
-      // workerBlobURL:false → `new Worker('/tesseract-worker-shim.js')` (direct, not blob-wrapped)
-      // The shim patches self.console.warn then loads the real worker via importScripts.
       tessWorker = await Tesseract.createWorker('vie+eng', 1, {
-        workerBlobURL: false,
+        // Use the shim worker so console.warn/error are patched BEFORE the
+        // Tesseract WASM initialises and emits "Parameter not found" warnings.
+        // workerBlobURL:false → regular Worker (not blob), so self.location
+        // resolves correctly inside the shim.
         workerPath: '/tesseract-worker-shim.js',
+        workerBlobURL: false,
         logger: (m: { status: string; progress: number }) => {
           if (m.status === 'recognizing text') {
             setReadProgress(`🔍 Trang ${currentPage}/${totalPages}: ${Math.round(m.progress * 100)}%`)
           }
         },
-      } as Parameters<typeof Tesseract.createWorker>[2])
+      })
+      // PSM 6 = uniform block; PSM 4 = single column — both usable for grade tables.
+      // preserve_interword_spaces keeps column gaps so our 2+-space split works.
+      await tessWorker.setParameters({
+        tessedit_pageseg_mode: '6',         // 6 = assume uniform block of text
+        preserve_interword_spaces: '1',
+        tessedit_char_whitelist: '',        // allow all chars (Vietnamese needs accents)
+      })
 
       for (let i = 1; i <= totalPages; i++) {
         currentPage = i
         setReadProgress(`🔍 Tesseract OCR trang ${i}/${totalPages}...`)
         const page = await pdf.getPage(i)
-        const vp = page.getViewport({ scale: 1.8 })
+        // Scale 2.5 → ~600 DPI from 300 DPI source — good balance of accuracy vs speed
+        // (3.5 = ~8700×12300px per A4 page → too slow for browser Tesseract)
+        const vp = page.getViewport({ scale: 2.5 })
         const canvas = document.createElement('canvas')
         canvas.width = vp.width
         canvas.height = vp.height
         await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp }).promise
+        // Otsu binarisation — speeds up Tesseract and improves contrast
+        preprocessCanvasForOCR(canvas)
+        // JPEG 85% — 3-5× smaller than PNG, negligible quality loss for OCR
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
         const { data: { text } } = await tessWorker.recognize(dataUrl)
         pageTexts.push(text)
@@ -646,7 +889,9 @@ export default function OCRReviewModal({
       if (fullText.trim().length > 20) {
         setRawOcrText(fullText)
         setReadProgress(`✅ Tesseract xong · ${fullText.length} ký tự · ${totalPages} trang`)
-        const parsed = parseRecordsClientSide(fullText, docType) ?? parseRecordsByRowNumber(fullText)
+        const parsed = parseRecordsFromColumnText(fullText, docType)
+          ?? parseRecordsClientSide(fullText, docType)
+          ?? parseRecordsByRowNumber(fullText)
         if (parsed && parsed.records.length > 0) {
           setRecords(parsed.records)
           setMeta(parsed.meta)
@@ -857,7 +1102,7 @@ export default function OCRReviewModal({
   ]
 
   const statCards = [
-    { label: 'Tổng', value: meta.total_records ?? records.length, color: 'text-blue-700' },
+    { label: 'Tổng', value: meta.total_records ?? records.length, color: 'text-primary-700 dark:text-primary-400' },
     { label: 'Đạt',   value: meta.so_dat ?? records.filter(r => r.ket_qua === 'Đạt').length, color: 'text-green-700' },
     { label: 'Rớt',   value: meta.so_khong_dat ?? records.filter(r => r.ket_qua === 'Không đạt').length, color: 'text-red-700' },
     { label: 'ĐTB',   value: meta.diem_trung_binh != null ? meta.diem_trung_binh.toFixed(2) : '—', color: 'text-purple-700' },
@@ -867,14 +1112,14 @@ export default function OCRReviewModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex flex-col z-50">
       {/* ── Modal Header ── */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shrink-0">
+      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-xl">🔍</span>
           <div>
-            <h2 className="font-bold text-gray-800 text-base leading-tight">Xem xét & Xác nhận OCR</h2>
-            <p className="text-xs text-gray-500 truncate max-w-xs">{docName}</p>
+            <h2 className="font-bold text-gray-800 dark:text-white text-base leading-tight">Xem xét & Xác nhận OCR</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{docName}</p>
           </div>
-          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">{docType}</span>
+          <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-300 text-xs rounded-full font-medium">{docType}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -923,7 +1168,7 @@ export default function OCRReviewModal({
           <button
             onClick={handleSave}
             disabled={step === 'loading' || step === 'saving'}
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded transition-colors"
+            className="px-4 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-semibold rounded transition-colors"
           >
             {step === 'saving' ? '⏳ Đang lưu…' : '✅ Lưu xác nhận'}
           </button>
@@ -939,13 +1184,13 @@ export default function OCRReviewModal({
 
       {/* ── Step: Reading PDF in browser ── */}
       {step === 'reading_pdf' && (
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
           <div className="text-center max-w-sm">
             <div className="text-5xl mb-4 animate-bounce">📚</div>
-            <h3 className="font-bold text-gray-800 text-lg mb-2">Đang đọc file PDF...</h3>
-            <p className="text-gray-500 text-sm mb-4">{readProgress || 'Khởi tạo PDF.js...'}</p>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }} />
+            <h3 className="font-bold text-gray-800 dark:text-white text-lg mb-2">Đang đọc file PDF...</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">{readProgress || 'Khởi tạo PDF.js...'}</p>
+            <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+              <div className="bg-primary-500 h-2 rounded-full animate-pulse" style={{ width: '60%' }} />
             </div>
             <p className="text-xs text-gray-400 mt-3">
               Hệ thống đang trích xuất text layer từ PDF của bạn
@@ -956,10 +1201,10 @@ export default function OCRReviewModal({
 
       {/* ── Loading spinner ── */}
       {step === 'loading' && (
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-slate-900">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600 font-medium">Đang phân tích tài liệu…</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-300 font-medium">Đang phân tích tài liệu…</p>
             <p className="text-gray-400 text-sm mt-1">OCR + Regex parsing</p>
           </div>
         </div>
@@ -1035,25 +1280,25 @@ export default function OCRReviewModal({
 
           {/* ── DIVIDER (draggable) ── */}
           <div
-            className="w-1.5 bg-gray-300 hover:bg-blue-400 cursor-col-resize shrink-0 transition-colors select-none"
+            className="w-1.5 bg-gray-300 hover:bg-primary-400 cursor-col-resize shrink-0 transition-colors select-none"
             onMouseDown={handleDividerMouseDown}
           />
 
           {/* ── RIGHT: Tabs — Bảng dữ liệu | Nội dung đã đọc ── */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-white">
+          <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-800">
 
             {/* Tab bar */}
-            <div className="bg-gray-100 border-b border-gray-200 shrink-0 flex items-center">
+            <div className="bg-gray-100 dark:bg-slate-700 border-b border-gray-200 dark:border-slate-600 shrink-0 flex items-center">
               <button
                 onClick={() => setRightTab('table')}
                 className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
                   rightTab === 'table'
-                    ? 'border-blue-600 text-blue-700 bg-white'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-primary-600 text-primary-700 dark:text-primary-400 bg-white dark:bg-slate-800'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
               >
                 📊 Bảng dữ liệu
-                <span className="ml-1.5 bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5">
+                <span className="ml-1.5 bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 rounded-full px-1.5 py-0.5">
                   {records.length}
                 </span>
               </button>
@@ -1061,8 +1306,8 @@ export default function OCRReviewModal({
                 onClick={() => setRightTab('text')}
                 className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
                   rightTab === 'text'
-                    ? 'border-green-600 text-green-700 bg-white'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-green-600 text-green-700 bg-white dark:bg-slate-800'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
               >
                 📝 Nội dung đã đọc
@@ -1093,7 +1338,7 @@ export default function OCRReviewModal({
             {/* Table */}
             <div className="flex-1 overflow-auto">
               <table className="w-full text-xs border-collapse">
-                <thead className="sticky top-0 bg-gray-50 z-10">
+                <thead className="sticky top-0 bg-gray-50 dark:bg-slate-700 z-10">
                   <tr>
                     {COLS.map(c => (
                       <th
@@ -1116,7 +1361,7 @@ export default function OCRReviewModal({
                         className={`border-b border-gray-100 transition-colors ${
                           hasError ? 'bg-red-50 hover:bg-red-100' :
                           isNotDat ? 'bg-orange-50 hover:bg-orange-100' :
-                          'hover:bg-blue-50'
+                          'hover:bg-primary-50 dark:hover:bg-primary-900/20'
                         }`}
                       >
                         {COLS.map(col => (
@@ -1136,7 +1381,7 @@ export default function OCRReviewModal({
                                 type="text"
                                 value={row[col.key]}
                                 onChange={e => handleCellChange(rowIdx, col.key, e.target.value)}
-                                className={`w-full px-1.5 py-0.5 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                className={`w-full px-1.5 py-0.5 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary-400 ${
                                   hasError && (col.key === 'ho_ten' || col.key === 'mssv' || col.key === 'diem_qp')
                                     ? 'border-red-400 bg-red-50'
                                     : 'border-transparent hover:border-gray-300 bg-transparent focus:bg-white'
@@ -1172,7 +1417,7 @@ export default function OCRReviewModal({
             </div>
 
             {/* Footer stats */}
-            <div className="border-t border-gray-200 bg-gray-50 px-3 py-2 shrink-0 flex gap-4 text-xs text-gray-600">
+            <div className="border-t border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/50 px-3 py-2 shrink-0 flex gap-4 text-xs text-gray-600 dark:text-gray-300">
               {statCards.map(c => (
                 <span key={c.label}>
                   <span className={`font-bold ${c.color}`}>{c.value}</span> {c.label}

@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { logger } from '../config/logger'
+import { authLimiter } from '../middleware/rateLimiter.middleware'
+import { validate, schemas } from '../middleware/validation.middleware'
 
 const router = Router()
 
@@ -10,12 +12,12 @@ const DEMO_USERS = [
   {
     id: '1',
     email: 'admin@tvu.edu.vn',
-    password: '$2a$10$YIjlrJxnM5Z5Z5Z5Z5Z5Z.5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z', // password
+    password: '$2a$10$Tp83TVHh1qB7fPZRqDNoReywn/psqMbw0dclY7OW.eMll/7qP4OXm', // password
     name: 'Admin TVU',
   },
 ]
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, validate(schemas.login), async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body
 
@@ -28,8 +30,8 @@ router.post('/login', async (req: Request, res: Response) => {
       })
     }
 
-    // Check password (demo: accept any password)
-    const isValidPassword = password === 'password' || await bcrypt.compare(password, user.password)
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, user.password)
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
@@ -38,9 +40,10 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Generate token
+    const jwtSecret = process.env.JWT_SECRET || 'tvu-gdqp-dev-secret-change-in-production'
     const token = jwt.sign(
       { id: user.id, email: user.email },
-      process.env.JWT_SECRET || 'secret',
+      jwtSecret,
       { expiresIn: '24h' }
     )
 

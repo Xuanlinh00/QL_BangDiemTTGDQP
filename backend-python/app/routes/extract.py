@@ -6,7 +6,7 @@ Parses raw OCR text from Vietnamese academic documents into structured records.
 Supported document types:
   DSGD     – Danh sách điểm / bảng điểm (student score sheets)
   QD       – Quyết định (administrative decisions — graduation, awards, etc.)
-  KeHoach  – Kế hoạch giảng dạy / lịch thi (teaching / exam schedules)
+  BieuMau  – Biểu mẫu hành chính (administrative forms / templates)
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ router = APIRouter()
 class ExtractRequest(BaseModel):
     document_id: str
     raw_text: str
-    document_type: str = "DSGD"   # "DSGD" | "QD" | "KeHoach"
+    document_type: str = "DSGD"   # "DSGD" | "QD" | "BieuMau"
 
 
 class StudentRecord(BaseModel):
@@ -74,9 +74,18 @@ class ExtractResponse(BaseModel):
 # ═══════════════════════════════════════════════════════
 
 def _normalize(text: str) -> str:
-    """Collapse whitespace, normalize newlines."""
+    """Normalize newlines; collapse runs of spaces but preserve column-separator markers
+    (3+ spaces from pdfExtract.ts) as double spaces so downstream patterns can split on them.
+    Also strips pdfExtract page-header lines (=== Trang N ===)."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"[ \t]+", " ", text)
+    # Remove page-header lines emitted by pdfExtract.ts
+    text = re.sub(r"^={3}\s*Trang\s+\d+\s*={3}\s*$", "", text, flags=re.MULTILINE)
+    # Remove Tesseract page-break markers
+    text = re.sub(r"^-{3}\s*PAGE BREAK\s*-{3}\s*$", "", text, flags=re.MULTILINE | re.IGNORECASE)
+    # Collapse 3+ spaces to 2 (column marker), then de-duplicate extra double-spaces
+    text = re.sub(r"[ \t]{3,}", "  ", text)
+    # Collapse 4+ consecutive blank lines to 2
+    text = re.sub(r"\n{4,}", "\n\n", text)
     return text.strip()
 
 
@@ -133,8 +142,15 @@ def _parse_dsgd(text: str) -> tuple[List[Dict], Dict, List[str]]:
     warnings: List[str] = []
     meta: Dict[str, Any] = {}
 
+    # Normalise first — strips page headers, collapses 3+ spaces to 2
+    text = _normalize(text)
+
     # ── Metadata ──────────────────────────────────────────────────────────
-    m = re.search(r"(?:Lớp|lớp|LỚP)[:\s]+([A-Z0-9]{2,20})", text)
+    # "Nhóm/Lớp: (01 - 02)/DA22TTA" or "Lớp: DA21TYC"
+    m = re.search(
+        r"(?:Nhóm/Lớp|NHÓM/LỚP)[\s:()\d \-]*/\s*([A-Z0-9]{4,20})",
+        text, re.IGNORECASE
+    ) or re.search(r"(?:Lớp|lớp|LỚP)[:\s]+([A-Z0-9]{2,20})", text)
     if m:
         meta["lop"] = m.group(1).strip()
 
@@ -142,12 +158,8 @@ def _parse_dsgd(text: str) -> tuple[List[Dict], Dict, List[str]]:
     if m:
         meta["mon_hoc"] = m.group(1).strip()
 
-    # Normalise: collapse multiple spaces to single space per line
-    lines = []
-    for raw_line in text.split("\n"):
-        normalised = re.sub(r"[ \t]+", " ", raw_line).strip()
-        if normalised:
-            lines.append(normalised)
+    # Build line list — text is already normalized so just split
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
 
     # ── Score helper ────────────────────────────────────────────────────────
     SCORE_RE = re.compile(
@@ -163,18 +175,21 @@ def _parse_dsgd(text: str) -> tuple[List[Dict], Dict, List[str]]:
         return found
 
     # ── Strategy 1: well-formatted tabular row ──────────────────────────────
-    # Accepts 1+ spaces between columns (not requiring 2+).
-    # STT  NAME  MSSV  CLASS  SCORE  [SCORE2]
+    # Accepts both single-space and double-space (column-marker) gaps.
+    # STT  NAME  MSSV  CLASS  SCORE  [SCORE2]  [KET_QUA]
+    # MSSV: pure digits (e.g. 110122001) or letters+digits (e.g. DA210001)
+    # LOP:  short code: 1-4 upper + 2 digits + at least 1 upper (e.g. DA21TYC)
+    # \s{1,2} instead of \s+ so a double-space column-marker is consumed exactly once.
     S1 = re.compile(
-        r"^(\d{1,3})\s+"
+        r"^(\d{1,3})\s{1,2}"
         r"([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
         r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+"
-        r"(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
-        r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+){1,5})\s+"
-        r"([A-Z]{0,3}\d{5,12})\s+"
-        r"([A-Z]{2,4}\d{2}[A-Z0-9]{0,10})\s+"
+        r"(?:\s[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
+        r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+){1,5})\s{1,2}"
+        r"([A-Z]{0,3}\d{5,12})\s{1,2}"
+        r"([A-Z]{1,4}\d{2}[A-Z][A-Z0-9]{0,10})\s{1,2}"
         r"(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)"
-        r"(?:\s+(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?))?",
+        r"(?:\s{1,2}(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?))?",
         re.UNICODE,
     )
 
@@ -196,6 +211,52 @@ def _parse_dsgd(text: str) -> tuple[List[Dict], Dict, List[str]]:
                 diem_lan2=score2 if score2 else None,
                 ket_qua=ket_qua,
             ).model_dump())
+
+    # ── Strategy 1B: TVU format — STT  MSSV  NAME  [DATE]  [GENDER]  [SCORES] ─
+    # Handles "Danh Sách Ghi Điểm" where MSSV precedes the student name.
+    # Scores are often handwritten (absent from text layer) so they are optional.
+    if not matched_table:
+        S1B = re.compile(
+            r"^(\d{1,3})\s{1,2}"
+            r"(1\d{8}|\d{7,10}|[A-Z]{0,3}\d{5,12})\s{1,2}"   # MSSV
+            r"([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
+            r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+"
+            r"(?:\s[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]"
+            r"[a-zàáâãèéêìíòóôõùúăđĩũơưắặằẳẵẻẽếềểễệỉịọộồổỗớờởỡợụủứừữựỳỵỷỹ]+){1,5})"
+            r"(?:\s{1,2}\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})?"   # optional date
+            r"(?:\s{1,2}(?:Nam|N[ữu]))?"                         # optional gender
+            r"(?:\s{1,2}(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?))?",  # optional score1
+            re.UNICODE,
+        )
+        # Need at least 3 matches to accept this format (avoid false positives)
+        tvu_matches = []
+        for line in lines:
+            m = S1B.match(line)
+            if m:
+                tvu_matches.append(m)
+        if len(tvu_matches) >= 3:
+            matched_table = True
+            lop = meta.get("lop", "")
+            # Re-extract class from header lines like "Nhóm/Lớp: .../DA22TTA"
+            lop_m = re.search(
+                r"(?:Nhóm/Lớp|NHÓM/LỚP)[\s:()0-9 \-]*/\s*([A-Z0-9]{4,20})",
+                text, re.IGNORECASE
+            )
+            if lop_m:
+                lop = lop_m.group(1).strip()
+                meta["lop"] = lop
+            for m in tvu_matches:
+                score1 = _clean_score(m.group(4) or "")
+                ket_qua = "Đạt" if (score1 is not None and score1 >= 5.0) else \
+                          "Không đạt" if score1 is not None else None
+                records.append(StudentRecord(
+                    stt=m.group(1),
+                    mssv=m.group(2).strip(),
+                    ho_ten=m.group(3).strip(),
+                    lop=lop or None,
+                    diem_qp=score1,
+                    ket_qua=ket_qua,
+                ).model_dump())
 
     # ── Strategy 2: MSSV-anchor search ─────────────────────────────────────
     # Find every MSSV, then look at ±2 adjacent lines for name + score.
@@ -391,7 +452,7 @@ async def parse_document(request: ExtractRequest):
             records, meta, warnings = _parse_dsgd(text)
         elif request.document_type == "QD":
             records, meta, warnings = _parse_quyet_dinh(text)
-        elif request.document_type == "KeHoach":
+        elif request.document_type == "BieuMau":
             records, meta, warnings = _parse_ke_hoach(text)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown document_type: {request.document_type}")

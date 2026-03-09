@@ -16,7 +16,15 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
       })
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any
+    const jwtSecret = process.env.JWT_SECRET
+    if (!jwtSecret) {
+      return res.status(500).json({
+        success: false,
+        error: { code: 'CONFIG_ERROR', message: 'JWT_SECRET not configured' },
+      })
+    }
+
+    const decoded = jwt.verify(token, jwtSecret) as any
     req.user = decoded
     next()
   } catch (error) {
