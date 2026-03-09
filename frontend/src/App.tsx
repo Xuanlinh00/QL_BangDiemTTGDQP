@@ -10,6 +10,7 @@ import Documents from './pages/Documents'
 import Decisions from './pages/Decisions'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import About from './pages/About'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ export default function App() {
               }
             >
               <Route index element={<Dashboard />} />
+              <Route path="about" element={<About />} />
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
               <Route path="reports" element={<Reports />} />

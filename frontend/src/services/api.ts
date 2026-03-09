@@ -111,14 +111,30 @@ export const docstoreApi = {
 }
 
 // ═══════════════════════════════════════════
-// Activities API (Center activities on Dashboard)
+// Activities API (Center activities - About page)
 // ═══════════════════════════════════════════
 export const activitiesApi = {
   list: () => api.get('/activities'),
-  create: (data: Record<string, unknown>) => api.post('/activities', data),
-  update: (id: string, data: Record<string, unknown>) => api.put(`/activities/${id}`, data),
+  create: (data: Record<string, unknown>, files?: File[]) => {
+    const form = new FormData()
+    Object.entries(data).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) form.append(k, String(v))
+    })
+    if (files) files.forEach(f => form.append('files', f))
+    return api.post('/activities', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  update: (id: string, data: Record<string, unknown>, files?: File[], removeMedia?: number[]) => {
+    const form = new FormData()
+    Object.entries(data).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) form.append(k, String(v))
+    })
+    if (files) files.forEach(f => form.append('files', f))
+    if (removeMedia && removeMedia.length > 0) form.append('removeMedia', removeMedia.join(','))
+    return api.put(`/activities/${id}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
   delete: (id: string) => api.delete(`/activities/${id}`),
   seed: () => api.post('/activities/seed'),
+  getMediaUrl: (activityId: string, mediaIndex: number) => `${API_URL}/activities/${activityId}/media/${mediaIndex}`,
 }
 
 export default api

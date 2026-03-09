@@ -205,23 +205,39 @@ const StudentRecordSchema = new Schema<IStudentRecord>({
 
 export const StudentRecord = mongoose.model<IStudentRecord>('StudentRecord', StudentRecordSchema)
 
-// ── Center Activity (for Dashboard about section) ──
+// ── Center Activity (for About page - blog post style) ──
+export interface IMediaItem {
+  fileName: string
+  mimeType: string
+  data: Buffer
+}
+
 export interface ICenterActivity extends MongoDocument {
   title: string
   description: string
+  content: string
   icon: string
   category: string
   order: number
   isActive: boolean
+  media: IMediaItem[]
 }
+
+const MediaItemSchema = new Schema({
+  fileName: { type: String, required: true },
+  mimeType: { type: String, required: true },
+  data: { type: Buffer, required: true },
+}, { _id: true })
 
 const CenterActivitySchema = new Schema<ICenterActivity>({
   title: { type: String, required: true },
   description: { type: String, default: '' },
+  content: { type: String, default: '' },
   icon: { type: String, default: '📋' },
   category: { type: String, default: 'general' },
   order: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },
+  media: { type: [MediaItemSchema], default: [] },
 }, { timestamps: true })
 
 export const CenterActivity = mongoose.model<ICenterActivity>('CenterActivity', CenterActivitySchema)

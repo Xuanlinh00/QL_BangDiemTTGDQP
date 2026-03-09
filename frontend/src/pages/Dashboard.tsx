@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useState, useEffect, useRef, useCallback } from 'react'
-import api, { activitiesApi } from '../services/api'
+import { useState, useEffect, useRef } from 'react'
+import api from '../services/api'
 
 interface Metrics {
   total_documents: number
@@ -11,16 +11,6 @@ interface Metrics {
   documents_error: number
   decisions_count: number
   alerts: string[]
-}
-
-interface Activity {
-  _id: string
-  title: string
-  description: string
-  icon: string
-  category: string
-  order: number
-  isActive: boolean
 }
 
 /* ── Animated Counter Hook ── */
@@ -132,55 +122,11 @@ export default function Dashboard() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left')
 
-  // Activities state
-  const [activities, setActivities] = useState<Activity[]>([])
-  const [showActivityModal, setShowActivityModal] = useState(false)
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
-
   useEffect(() => {
     api.get('/dashboard/metrics')
       .then(res => { if (res.data?.data) setMetrics(res.data.data) })
       .catch(() => {})
   }, [])
-
-  // Load activities
-  const loadActivities = useCallback(async () => {
-    try {
-      const res = await activitiesApi.list()
-      setActivities(res.data.data || [])
-    } catch { /* ignore */ }
-  }, [])
-
-  useEffect(() => { loadActivities() }, [loadActivities])
-
-  // Seed defaults if empty
-  useEffect(() => {
-    if (activities.length === 0) {
-      activitiesApi.seed().then(() => loadActivities()).catch(() => {})
-    }
-  }, [activities.length, loadActivities])
-
-  const handleDeleteActivity = useCallback(async (id: string) => {
-    if (!window.confirm('Bạn có chắc muốn xóa hoạt động này?')) return
-    try {
-      await activitiesApi.delete(id)
-      setActivities(prev => prev.filter(a => a._id !== id))
-    } catch { /* ignore */ }
-  }, [])
-
-  const handleSaveActivity = useCallback(async (data: Partial<Activity>) => {
-    try {
-      if (editingActivity) {
-        const res = await activitiesApi.update(editingActivity._id, data)
-        setActivities(prev => prev.map(a => a._id === editingActivity._id ? res.data.data : a))
-      } else {
-        const res = await activitiesApi.create(data)
-        setActivities(prev => [...prev, res.data.data])
-      }
-      setShowActivityModal(false)
-      setEditingActivity(null)
-    } catch { /* ignore */ }
-  }, [editingActivity])
 
   // Auto-rotate hero slides
   useEffect(() => {
@@ -382,168 +328,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ═══════════ 4.5. GIỚI THIỆU TRUNG TÂM + HOẠT ĐỘNG ═══════════ */}
-      <div>
-        {/* Section header */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-1.5 h-8 bg-gradient-to-b from-red-500 to-yellow-500 rounded-full" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Giới thiệu Trung tâm</h2>
-        </div>
-
-        {/* Intro card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden mb-6 animate-fade-in-up">
-          <div className="bg-gradient-to-r from-red-700 via-red-600 to-yellow-500 p-6 lg:p-8 text-white">
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 w-16 h-16 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
-                <span className="text-3xl">🏛️</span>
-              </div>
-              <div>
-                <h3 className="text-lg lg:text-xl font-extrabold tracking-tight">
-                  TRUNG TÂM GIÁO DỤC QUỐC PHÒNG - AN NINH VÀ THỂ THAO
-                </h3>
-                <p className="text-white/80 text-sm mt-1">Đại học Đà Nẵng &bull; UD-CNDSS</p>
-                <p className="text-white/70 text-xs mt-0.5">Center of National Defense – Security Education and Sports, The University of Danang</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-6 lg:p-8 space-y-4 text-sm text-gray-700 dark:text-slate-300 leading-relaxed">
-            <p>
-              Trung tâm Giáo dục Quốc phòng – An ninh và Thể thao thuộc Đại học Đà Nẵng được thành lập theo Quyết định 509/QĐ-ĐHĐN ngày 21/02/2025 của Giám đốc Đại học Đà Nẵng trên cơ sở sáp nhập Khoa Giáo dục Quốc phòng – An ninh với Trung tâm Thể thao nhằm thực hiện nhiệm vụ: đào tạo, bồi dưỡng chương trình Giáo dục Quốc phòng – An ninh cho sinh viên Đại học Đà Nẵng; Tổ chức các hoạt động thể thao cho các đơn vị có nhu cầu, các cơ sở đào tạo khác theo đúng quy định của nhà nước; cấp chứng chỉ Giáo dục Quốc phòng – An ninh cho sinh viên sau khi hoàn thành chương trình học tập.
-            </p>
-            <p>
-              Giáo dục quốc phòng và an ninh là bộ phận của nền giáo dục quốc dân, một nội dung cơ bản trong xây dựng nền quốc phòng toàn dân, an ninh nhân dân; là môn học chính khóa trong chương trình giáo dục và đào tạo trong trung học phổ thông đến đại học và các trường chính trị, hành chính, đoàn thể.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="flex items-start gap-3">
-                <span className="text-lg">📞</span>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Điện thoại liên lạc</p>
-                  <p className="font-medium text-gray-800 dark:text-slate-200">(84).236.3952279</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-lg">📍</span>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Cơ sở đào tạo</p>
-                  <p className="font-medium text-gray-800 dark:text-slate-200">Khu đô thị Đại học Đà Nẵng, phường Ngũ Hành Sơn, Đà Nẵng</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Activities header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-1.5 h-8 bg-gradient-to-b from-green-500 to-teal-500 rounded-full" />
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Các hoạt động của Trung tâm</h2>
-            <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 px-2 py-0.5 rounded-full font-medium">
-              {activities.filter(a => a.isActive).length} hoạt động
-            </span>
-          </div>
-          <button
-            onClick={() => { setEditingActivity(null); setShowActivityModal(true) }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-            Thêm hoạt động
-          </button>
-        </div>
-
-        {/* Activities grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {activities.filter(a => a.isActive).map((activity, i) => (
-            <div
-              key={activity._id}
-              className="group relative bg-white dark:bg-slate-800 rounded-2xl p-5 border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 animate-fade-in-up overflow-hidden"
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              {/* Hover accent */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-accent-500 opacity-0 group-hover:opacity-[0.03] transition-opacity duration-300 rounded-2xl" />
-
-              {/* Admin actions */}
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => { setEditingActivity(activity); setShowActivityModal(true) }}
-                  className="p-1.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 text-blue-600 dark:text-blue-400 rounded-lg transition-colors"
-                  title="Sửa"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                </button>
-                <button
-                  onClick={() => handleDeleteActivity(activity._id)}
-                  className="p-1.5 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-                  title="Xóa"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
-              </div>
-
-              <div className="text-3xl mb-3">{activity.icon}</div>
-              <h4 className="text-sm font-bold text-gray-800 dark:text-slate-200 mb-1.5 pr-14 line-clamp-2">{activity.title}</h4>
-              <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed line-clamp-3">{activity.description}</p>
-              <div className="mt-3">
-                <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                  activity.category === 'education' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
-                  activity.category === 'training' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' :
-                  activity.category === 'sports' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
-                  activity.category === 'research' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
-                  activity.category === 'management' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' :
-                  activity.category === 'news' ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400' :
-                  'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'
-                }`}>
-                  {activity.category === 'education' ? 'Giáo dục' :
-                   activity.category === 'training' ? 'Huấn luyện' :
-                   activity.category === 'sports' ? 'Thể thao' :
-                   activity.category === 'research' ? 'Nghiên cứu' :
-                   activity.category === 'extracurricular' ? 'Ngoại khóa' :
-                   activity.category === 'management' ? 'Quản lý' :
-                   activity.category === 'cooperation' ? 'Hợp tác' :
-                   activity.category === 'development' ? 'Phát triển' :
-                   activity.category === 'news' ? 'Tin tức' :
-                   activity.category}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Inactive activities (collapsed) */}
-        {activities.filter(a => !a.isActive).length > 0 && (
-          <details className="mt-4">
-            <summary className="text-sm text-gray-400 dark:text-slate-500 cursor-pointer hover:text-gray-600 dark:hover:text-slate-300">
-              {activities.filter(a => !a.isActive).length} hoạt động đã ẩn
-            </summary>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-3">
-              {activities.filter(a => !a.isActive).map((activity) => (
-                <div key={activity._id} className="relative bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200 dark:border-slate-700 opacity-60">
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <button onClick={() => { setEditingActivity(activity); setShowActivityModal(true) }} className="p-1.5 bg-blue-100 text-blue-600 rounded-lg" title="Sửa">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                    </button>
-                    <button onClick={() => handleDeleteActivity(activity._id)} className="p-1.5 bg-red-100 text-red-600 rounded-lg" title="Xóa">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                  <div className="text-3xl mb-3 grayscale">{activity.icon}</div>
-                  <h4 className="text-sm font-bold text-gray-500 dark:text-slate-400 mb-1">{activity.title}</h4>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 line-clamp-2">{activity.description}</p>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
-      </div>
-
-      {/* Activity Add/Edit Modal */}
-      {showActivityModal && (
-        <ActivityModal
-          activity={editingActivity}
-          onClose={() => { setShowActivityModal(false); setEditingActivity(null) }}
-          onSave={handleSaveActivity}
-        />
-      )}
-
       {/* ═══════════ 5. BOTTOM SECTION: Activity + Alerts + Quick Info ═══════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Activity */}
@@ -665,138 +449,6 @@ export default function Dashboard() {
         <p className="text-xs text-gray-300 dark:text-slate-600 mt-1">
           Devotion &bull; Transparency &bull; Friendliness &bull; Innovation
         </p>
-      </div>
-    </div>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════════
-   Activity Add/Edit Modal
-   ══════════════════════════════════════════════════════════════ */
-
-const CATEGORY_OPTIONS = [
-  { value: 'education', label: 'Giáo dục' },
-  { value: 'training', label: 'Huấn luyện' },
-  { value: 'sports', label: 'Thể thao' },
-  { value: 'research', label: 'Nghiên cứu' },
-  { value: 'extracurricular', label: 'Ngoại khóa' },
-  { value: 'management', label: 'Quản lý' },
-  { value: 'cooperation', label: 'Hợp tác' },
-  { value: 'development', label: 'Phát triển' },
-  { value: 'news', label: 'Tin tức' },
-  { value: 'general', label: 'Chung' },
-]
-
-const ICON_OPTIONS = ['🎓', '🎖️', '📜', '⚖️', '💪', '🔬', '🏕️', '🛡️', '📊', '🌐', '👨‍🏫', '📰', '📋', '🏛️', '🏆', '📚', '⭐', '🔔', '🎯', '🤝']
-
-function ActivityModal({ activity, onClose, onSave }: {
-  activity: Activity | null
-  onClose: () => void
-  onSave: (data: Partial<Activity>) => void
-}) {
-  const [title, setTitle] = useState(activity?.title || '')
-  const [description, setDescription] = useState(activity?.description || '')
-  const [icon, setIcon] = useState(activity?.icon || '📋')
-  const [category, setCategory] = useState(activity?.category || 'general')
-  const [order, setOrder] = useState(activity?.order ?? 0)
-  const [isActive, setIsActive] = useState(activity?.isActive ?? true)
-
-  const handleSubmit = () => {
-    if (!title.trim()) return
-    onSave({ title: title.trim(), description: description.trim(), icon, category, order, isActive })
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full mx-4 border border-gray-200 dark:border-slate-700 max-h-[90vh] flex flex-col">
-        <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0">
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white">
-            {activity ? 'Sửa hoạt động' : 'Thêm hoạt động mới'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white text-2xl">&times;</button>
-        </div>
-        <div className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Icon picker */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Biểu tượng</label>
-            <div className="flex flex-wrap gap-2">
-              {ICON_OPTIONS.map(ic => (
-                <button
-                  key={ic}
-                  type="button"
-                  onClick={() => setIcon(ic)}
-                  className={`w-10 h-10 text-xl flex items-center justify-center rounded-xl border-2 transition-all ${icon === ic ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 scale-110' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}`}
-                >
-                  {ic}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* Title */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Tên hoạt động *</label>
-            <input
-              value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="VD: Đào tạo GDQP-AN"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Mô tả</label>
-            <textarea
-              value={description} onChange={e => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Mô tả chi tiết hoạt động..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
-            />
-          </div>
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Danh mục</label>
-            <select
-              value={category} onChange={e => setCategory(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
-            >
-              {CATEGORY_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          {/* Order + Active */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Thứ tự</label>
-              <input
-                type="number" value={order} onChange={e => setOrder(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Trạng thái</label>
-              <label className="flex items-center gap-3 mt-1 cursor-pointer">
-                <div
-                  onClick={() => setIsActive(!isActive)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${isActive ? 'bg-primary-500' : 'bg-gray-300 dark:bg-slate-600'}`}
-                >
-                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isActive ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-                </div>
-                <span className="text-sm text-gray-700 dark:text-slate-300">{isActive ? 'Hiển thị' : 'Đã ẩn'}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        {/* Footer */}
-        <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-3 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
-            Hủy
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!title.trim()}
-            className="px-5 py-2 text-sm font-medium bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl transition-colors shadow-sm"
-          >
-            {activity ? 'Cập nhật' : 'Thêm mới'}
-          </button>
-        </div>
       </div>
     </div>
   )
