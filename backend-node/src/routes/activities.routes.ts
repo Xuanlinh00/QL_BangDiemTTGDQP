@@ -1,10 +1,44 @@
-import { Router } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { CenterActivity } from '../models'
 import { authMiddleware } from '../middleware/auth.middleware'
 
 const router = Router()
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
+
+// ── Media storage on local disk ──
+const MEDIA_DIR = path.resolve(__dirname, '../../uploads/activities')
+if (!fs.existsSync(MEDIA_DIR)) {
+  fs.mkdirSync(MEDIA_DIR, { recursive: true })
+}
+
+function getMediaPath(activityId: string, mediaId: string, ext: string): string {
+  const dir = path.join(MEDIA_DIR, activityId)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  return path.join(dir, `${mediaId}${ext}`)
+}
+
+function extFromMime(mimeType: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
+    'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
+    'application/pdf': '.pdf',
+  }
+  return map[mimeType] || '.bin'
+}
+
+// Multer error handler
+function handleMulterError(err: any, _req: Request, res: Response, next: NextFunction) {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ success: false, error: { message: 'File qu\u00e1 l\u1edbn (t\u1ed1i \u0111a 200MB)' } })
+    }
+    return res.status(400).json({ success: false, error: { message: err.message } })
+  }
+  next(err)
+}
 
 // Public: list activities (exclude media.data for performance)
 router.get('/', async (_req, res) => {
@@ -19,7 +53,7 @@ router.get('/', async (_req, res) => {
 // Public: serve a media file by activity id + media index
 router.get('/:id/media/:idx', async (req, res) => {
   try {
-    const item = await CenterActivity.findById(req.params.id)
+    const item = await CenterActivity.findById(req.params.id).select('-media.data')
     if (!item) return res.status(404).json({ success: false, error: { message: 'Not found' } })
     const idx = parseInt(req.params.idx, 10)
     if (isNaN(idx) || idx < 0 || idx >= item.media.length) {
@@ -29,7 +63,21 @@ router.get('/:id/media/:idx', async (req, res) => {
     res.set('Content-Type', m.mimeType)
     res.set('Content-Disposition', `inline; filename="${encodeURIComponent(m.fileName)}"`)
     res.set('Cache-Control', 'public, max-age=86400')
-    res.send(m.data)
+
+    // Try local file first
+    const mediaId = (m as any)._id.toString()
+    const filePath = getMediaPath(req.params.id, mediaId, extFromMime(m.mimeType))
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath)
+    }
+
+    // Fallback: legacy data in MongoDB
+    const fullItem = await CenterActivity.findById(req.params.id)
+    if (fullItem && fullItem.media[idx]?.data) {
+      return res.send(fullItem.media[idx].data)
+    }
+
+    res.status(404).json({ success: false, error: { message: 'Media file not found' } })
   } catch (err: any) {
     res.status(500).json({ success: false, error: { message: err.message } })
   }
@@ -39,14 +87,17 @@ router.get('/:id/media/:idx', async (req, res) => {
 router.use(authMiddleware)
 
 // Create with media upload
-router.post('/', upload.array('files', 10), async (req, res) => {
+router.post('/', upload.array('files', 10), handleMulterError, async (req: Request, res: Response) => {
   try {
     const { title, description, content, icon, category, order, isActive } = req.body
-    const media = (req.files as Express.Multer.File[] || []).map(f => ({
+    const files = (req.files as Express.Multer.File[] || [])
+
+    // Create media metadata (no binary data in MongoDB)
+    const media = files.map(f => ({
       fileName: f.originalname,
       mimeType: f.mimetype,
-      data: f.buffer,
     }))
+
     const item = await CenterActivity.create({
       title, description, content: content || '',
       icon: icon || '📋',
@@ -55,6 +106,14 @@ router.post('/', upload.array('files', 10), async (req, res) => {
       isActive: isActive !== 'false',
       media,
     })
+
+    // Save files to disk
+    const actId = item._id.toString()
+    item.media.forEach((m: any, i: number) => {
+      const filePath = getMediaPath(actId, m._id.toString(), extFromMime(files[i].mimetype))
+      fs.writeFileSync(filePath, files[i].buffer)
+    })
+
     // Return without media data
     const result = item.toObject()
     ;(result as any).media = result.media.map((m: any) => ({ _id: m._id, fileName: m.fileName, mimeType: m.mimeType }))
@@ -65,9 +124,9 @@ router.post('/', upload.array('files', 10), async (req, res) => {
 })
 
 // Update with optional media upload
-router.put('/:id', upload.array('files', 10), async (req, res) => {
+router.put('/:id', upload.array('files', 10), handleMulterError, async (req: Request, res: Response) => {
   try {
-    const item = await CenterActivity.findById(req.params.id)
+    const item = await CenterActivity.findById(req.params.id).select('-media.data')
     if (!item) return res.status(404).json({ success: false, error: { message: 'Not found' } })
 
     const { title, description, content, icon, category, order, isActive, removeMedia } = req.body
@@ -79,23 +138,39 @@ router.put('/:id', upload.array('files', 10), async (req, res) => {
     if (order !== undefined) item.order = parseInt(order, 10)
     if (isActive !== undefined) item.isActive = isActive !== 'false'
 
+    const actId = item._id.toString()
+
     // Remove media by indices (comma-separated)
     if (removeMedia) {
       const indices = removeMedia.split(',').map(Number).sort((a: number, b: number) => b - a)
       for (const idx of indices) {
         if (idx >= 0 && idx < item.media.length) {
+          const m = item.media[idx] as any
+          // Delete file from disk
+          const filePath = getMediaPath(actId, m._id.toString(), extFromMime(m.mimeType))
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
           item.media.splice(idx, 1)
         }
       }
     }
 
-    // Add new media files
+    // Add new media files (metadata only in MongoDB)
     const newFiles = (req.files as Express.Multer.File[] || [])
     for (const f of newFiles) {
-      item.media.push({ fileName: f.originalname, mimeType: f.mimetype, data: f.buffer } as any)
+      item.media.push({ fileName: f.originalname, mimeType: f.mimetype } as any)
     }
 
     await item.save()
+
+    // Save new files to disk (after save so we have _id)
+    if (newFiles.length > 0) {
+      const savedMedia = item.media.slice(-newFiles.length)
+      savedMedia.forEach((m: any, i: number) => {
+        const filePath = getMediaPath(actId, m._id.toString(), extFromMime(newFiles[i].mimetype))
+        fs.writeFileSync(filePath, newFiles[i].buffer)
+      })
+    }
+
     const result = item.toObject()
     ;(result as any).media = result.media.map((m: any) => ({ _id: m._id, fileName: m.fileName, mimeType: m.mimeType }))
     res.json({ success: true, data: result })
@@ -108,6 +183,11 @@ router.put('/:id', upload.array('files', 10), async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     await CenterActivity.findByIdAndDelete(req.params.id)
+    // Delete media directory
+    const mediaDir = path.join(MEDIA_DIR, req.params.id)
+    if (fs.existsSync(mediaDir)) {
+      fs.rmSync(mediaDir, { recursive: true, force: true })
+    }
     res.json({ success: true })
   } catch (err: any) {
     res.status(500).json({ success: false, error: { message: err.message } })

@@ -93,6 +93,15 @@ export default function Login() {
         <p className="text-center text-sm text-gray-500 dark:text-slate-400 mt-6">
           Demo: admin@tvu.edu.vn / password
         </p>
+
+        <div className="text-center mt-4">
+          <a
+            href="/gioi-thieu"
+            className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium hover:underline"
+          >
+            Xem giới thiệu Trung tâm →
+          </a>
+        </div>
       </div>
     </div>
   )

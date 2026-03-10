@@ -17,6 +17,7 @@ export interface IDecisionFile extends MongoDocument {
   source: string
   mimeType?: string
   fileData?: Buffer
+  gridfsFileId?: mongoose.Types.ObjectId
 }
 
 const DecisionFileSchema = new Schema<IDecisionFile>({
@@ -35,6 +36,7 @@ const DecisionFileSchema = new Schema<IDecisionFile>({
   source: { type: String, default: 'local' },
   mimeType: { type: String },
   fileData: { type: Buffer },
+  gridfsFileId: { type: Schema.Types.ObjectId },
 }, { timestamps: true })
 
 export const DecisionFile = mongoose.model<IDecisionFile>('DecisionFile', DecisionFileSchema)
@@ -209,7 +211,7 @@ export const StudentRecord = mongoose.model<IStudentRecord>('StudentRecord', Stu
 export interface IMediaItem {
   fileName: string
   mimeType: string
-  data: Buffer
+  data?: Buffer
 }
 
 export interface ICenterActivity extends MongoDocument {
@@ -226,7 +228,7 @@ export interface ICenterActivity extends MongoDocument {
 const MediaItemSchema = new Schema({
   fileName: { type: String, required: true },
   mimeType: { type: String, required: true },
-  data: { type: Buffer, required: true },
+  data: { type: Buffer },
 }, { _id: true })
 
 const CenterActivitySchema = new Schema<ICenterActivity>({

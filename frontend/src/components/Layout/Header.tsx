@@ -63,7 +63,7 @@ export default function Header() {
           </svg>
           <input
             type="text"
-            placeholder="Tìm MSSV, tên SV, mã đại đội/trung đội..."
+            placeholder="Tìm kiếm..."
             value={headerSearch}
             onChange={(e) => setHeaderSearch(e.target.value)}
             onKeyDown={(e) => {

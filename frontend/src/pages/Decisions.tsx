@@ -173,12 +173,18 @@ export default function Decisions() {
     try {
       const res = await decisionsApi.upload(uploadedFiles, data.year)
       const newFiles = (res.data.data || []).map(norm)
+      const skipped: string[] = res.data.skipped || []
       setFiles(prev => [...prev, ...newFiles])
-      toast.success(`Đã thêm ${uploadedFiles.length} file quyết định`)
+      if (newFiles.length > 0 && skipped.length > 0) {
+        toast.success(`Đã thêm ${newFiles.length} file, bỏ qua ${skipped.length} file trùng tên`)
+      } else if (newFiles.length > 0) {
+        toast.success(`Đã thêm ${newFiles.length} file quyết định`)
+      }
       setShowAddFileModal(false)
-    } catch (e) {
+    } catch (e: any) {
       console.error('Upload failed:', e)
-      toast.error('Tải lên thất bại')
+      const msg = e?.response?.data?.error || 'Tải lên thất bại'
+      toast.error(msg)
     }
   }, [])
 

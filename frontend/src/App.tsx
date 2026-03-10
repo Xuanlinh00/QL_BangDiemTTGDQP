@@ -11,6 +11,7 @@ import Decisions from './pages/Decisions'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import About from './pages/About'
+import PublicAbout from './pages/PublicAbout'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ export default function App() {
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/gioi-thieu" element={<PublicAbout />} />
             <Route
               path="/"
               element={

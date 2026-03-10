@@ -444,10 +444,7 @@ export default function Dashboard() {
       {/* ═══════════ 6. FOOTER RIBBON ═══════════ */}
       <div className="text-center py-6 border-t border-gray-100 dark:border-slate-800">
         <p className="text-xs text-gray-400 dark:text-slate-500">
-          Trung tâm Giáo dục Quốc phòng - An ninh, Trường Đại học Trà Vinh
-        </p>
-        <p className="text-xs text-gray-300 dark:text-slate-600 mt-1">
-          Devotion &bull; Transparency &bull; Friendliness &bull; Innovation
+          Copyright © 2026 Bản quyền thuộc về Trung tâm Giáo dục Quốc phòng - An ninh Đại học Trà Vinh
         </p>
       </div>
     </div>

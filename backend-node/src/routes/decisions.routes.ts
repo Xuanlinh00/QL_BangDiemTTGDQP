@@ -1,9 +1,21 @@
 import { Router, Request, Response } from 'express'
 import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { DecisionFile, DecisionFolder } from '../models'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+
+// ── File storage on local disk ──
+const UPLOADS_DIR = path.resolve(__dirname, '../../uploads/decisions')
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+}
+
+function getFilePath(docId: string, ext: string = '.pdf'): string {
+  return path.join(UPLOADS_DIR, `${docId}${ext}`)
+}
 
 // ── List all decisions (optionally filter by year) ──
 router.get('/', async (req: Request, res: Response) => {
@@ -27,50 +39,82 @@ router.post('/upload', upload.array('files', 50), async (req: Request, res: Resp
     }
 
     const results = []
-    for (const file of uploadedFiles) {
-      // Decode multer latin1 originalname back to utf8
-      const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8')
-      // Extract QD number from filename
-      const m = fileName.match(/^(\d+)[.\s]*[QqĐđ]/)
-      const number = m ? m[1] : ''
+    const errors: string[] = []
+    const skipped: string[] = []
 
-      const doc = await DecisionFile.create({
-        fileName,
-        number,
-        date: '',
-        cohort: 0,
-        year,
-        system: '',
-        total_students: 0,
-        matched: 0,
-        reconciled: false,
-        pages: 0,
-        fileSize: file.size,
-        uploadedAt: new Date().toISOString().split('T')[0],
-        source: 'local',
-        mimeType: file.mimetype,
-        fileData: file.buffer,
-      })
-      results.push({
-        _id: doc._id,
-        fileName: doc.fileName,
-        number: doc.number,
-        date: doc.date,
-        cohort: doc.cohort,
-        year: doc.year,
-        system: doc.system,
-        total_students: doc.total_students,
-        matched: doc.matched,
-        reconciled: doc.reconciled,
-        pages: doc.pages,
-        fileSize: doc.fileSize,
-        uploadedAt: doc.uploadedAt,
-        source: doc.source,
-        mimeType: doc.mimeType,
-      })
+    // Pre-fetch existing fileNames for this year to detect duplicates
+    const existingFiles = await DecisionFile.find({ year }, { fileName: 1 }).lean()
+    const existingNames = new Set(existingFiles.map(f => f.fileName))
+
+    for (const file of uploadedFiles) {
+      try {
+        const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8')
+
+        // Skip duplicate fileName within same year
+        if (existingNames.has(fileName)) {
+          skipped.push(fileName)
+          continue
+        }
+        existingNames.add(fileName) // prevent duplicates within same batch
+
+        const m = fileName.match(/^(\d+)[.\s]*[QqĐđ]/)
+        const number = m ? m[1] : ''
+
+        // Create metadata document (no binary data in MongoDB)
+        const doc = await DecisionFile.create({
+          fileName,
+          number,
+          date: '',
+          cohort: 0,
+          year,
+          system: '',
+          total_students: 0,
+          matched: 0,
+          reconciled: false,
+          pages: 0,
+          fileSize: file.size,
+          uploadedAt: new Date().toISOString().split('T')[0],
+          source: 'local',
+          mimeType: file.mimetype,
+        })
+
+        // Save file to local disk
+        const filePath = getFilePath(doc._id.toString())
+        fs.writeFileSync(filePath, file.buffer)
+
+        results.push({
+          _id: doc._id,
+          fileName: doc.fileName,
+          number: doc.number,
+          date: doc.date,
+          cohort: doc.cohort,
+          year: doc.year,
+          system: doc.system,
+          total_students: doc.total_students,
+          matched: doc.matched,
+          reconciled: doc.reconciled,
+          pages: doc.pages,
+          fileSize: doc.fileSize,
+          uploadedAt: doc.uploadedAt,
+          source: doc.source,
+          mimeType: doc.mimeType,
+        })
+      } catch (fileErr: any) {
+        const fName = Buffer.from(file.originalname, 'latin1').toString('utf8')
+        console.error(`Upload error for ${fName}:`, fileErr.message)
+        errors.push(fName)
+      }
     }
-    res.json({ success: true, data: results })
+
+    if (results.length === 0 && skipped.length === 0) {
+      return res.status(500).json({ success: false, error: `All files failed to upload` })
+    }
+    if (results.length === 0 && skipped.length > 0) {
+      return res.status(409).json({ success: false, error: `Tất cả ${skipped.length} file đã tồn tại`, skipped })
+    }
+    res.json({ success: true, data: results, errors: errors.length > 0 ? errors : undefined, skipped: skipped.length > 0 ? skipped : undefined })
   } catch (err: any) {
+    console.error('Upload error:', err)
     res.status(500).json({ success: false, error: err.message })
   }
 })
@@ -78,13 +122,25 @@ router.post('/upload', upload.array('files', 50), async (req: Request, res: Resp
 // ── Download file blob ──
 router.get('/:id/file', async (req: Request, res: Response) => {
   try {
-    const doc = await DecisionFile.findById(req.params.id).select('fileData fileName mimeType')
-    if (!doc || !doc.fileData) {
+    const doc = await DecisionFile.findById(req.params.id).select('fileName mimeType fileData')
+    if (!doc) {
       return res.status(404).json({ success: false, error: 'File not found' })
     }
     res.set('Content-Type', doc.mimeType || 'application/pdf')
     res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.fileName)}"`)
-    res.send(doc.fileData)
+
+    // Try local file first
+    const filePath = getFilePath(req.params.id)
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath)
+    }
+
+    // Fallback: legacy data stored in MongoDB document
+    if (doc.fileData) {
+      return res.send(doc.fileData)
+    }
+
+    res.status(404).json({ success: false, error: 'File data not found' })
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
   }
@@ -111,6 +167,11 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const doc = await DecisionFile.findByIdAndDelete(req.params.id)
     if (!doc) return res.status(404).json({ success: false, error: 'Not found' })
+    // Delete local file if exists
+    const filePath = getFilePath(req.params.id)
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath)
+    }
     res.json({ success: true })
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
