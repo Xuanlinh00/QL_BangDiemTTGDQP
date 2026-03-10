@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/tvu_gdqp_admin"
 
     # Database - MongoDB
-    MONGODB_URL: str = "mongodb://admin:password@localhost:27017"
-    MONGODB_DB_NAME: str = "tvu_documents"
+    MONGODB_URL: str = "mongodb+srv://user:ocH1WGTKmC0dQ1gW@cluster0.tqmq2ht.mongodb.net/tvu_gdqp?appName=Cluster0"
+    MONGODB_DB_NAME: str = "tvu_gdqp"
 
     # AWS
     AWS_REGION: str = "ap-southeast-1"
