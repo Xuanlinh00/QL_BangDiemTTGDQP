@@ -32,7 +32,7 @@ const quickMenuItems = [
   { label: 'Trang chủ', path: '/', icon: 'home' },
   { label: 'Giới thiệu', path: '/about', icon: 'info' },
   { label: 'Quyết định', path: '/decisions', icon: 'check' },
-  { label: 'Báo cáo', path: '/reports', icon: 'chart' },
+  // ...existing code...
   { label: 'Cài đặt', path: '/settings', icon: 'settings' },
 ]
 

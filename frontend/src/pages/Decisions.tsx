@@ -183,8 +183,15 @@ export default function Decisions() {
       setShowAddFileModal(false)
     } catch (e: any) {
       console.error('Upload failed:', e)
+      const status = e?.response?.status
       const msg = e?.response?.data?.error || 'Tải lên thất bại'
-      toast.error(msg)
+      const skipped: string[] = e?.response?.data?.skipped || []
+      if (status === 409) {
+        toast(`${skipped.length} file đã tồn tại, bỏ qua`, { icon: '⚠️' })
+        setShowAddFileModal(false)
+      } else {
+        toast.error(msg)
+      }
     }
   }, [])
 

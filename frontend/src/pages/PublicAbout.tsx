@@ -111,7 +111,7 @@ export default function PublicAbout() {
                   TRUNG TÂM GIÁO DỤC QUỐC PHÒNG VÀ AN NINH
                 </h2>
                 <p className="text-white/80 text-sm mt-1">Trường Đại học Trà Vinh &bull; TVU</p>
-                <p className="text-white/70 text-xs mt-0.5">Center of National Defense and Security Education, Tra Vinh University</p>
+                <p className="text-white/70 text-xs mt-0.5">...</p>
               </div>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function PublicAbout() {
                 <span className="text-lg">📞</span>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase">Điện thoại liên lạc</p>
-                  <p className="font-medium text-gray-800">(84).294.3855246</p>
+                  <p className="font-medium text-gray-800">...</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">

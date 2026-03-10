@@ -31,6 +31,9 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
   const [customProgram, setCustomProgram] = useState<string>('')
   const [showCustomProgram, setShowCustomProgram] = useState(false)
   const [programOptions, setProgramOptions] = useState<string[]>(DEFAULT_PROGRAMS)
+  const [customYear, setCustomYear] = useState<string>('')
+  const [showCustomYear, setShowCustomYear] = useState(false)
+  const [extraYears, setExtraYears] = useState<number[]>([])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -114,6 +117,8 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
     setTrainingProgram('')
     setCustomProgram('')
     setShowCustomProgram(false)
+    setShowCustomYear(false)
+    setCustomYear('')
     onClose()
   }
 
@@ -144,16 +149,60 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
                 Năm học <span className="text-red-500">*</span>
               </label>
-              <select
-                value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">-- Chọn năm --</option>
-                {yearOptions.map(y => (
-                  <option key={y} value={String(y)}>{y}</option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={showCustomYear ? '__custom__' : academicYear}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setShowCustomYear(true)
+                      setAcademicYear('')
+                      setCustomYear('')
+                    } else {
+                      setShowCustomYear(false)
+                      setAcademicYear(e.target.value)
+                      setCustomYear('')
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">-- Chọn năm --</option>
+                  {[...new Set([...yearOptions, ...extraYears])].sort((a, b) => b - a).map(y => (
+                    <option key={y} value={String(y)}>{y}</option>
+                  ))}
+                  <option value="__custom__">＋ Thêm năm...</option>
+                </select>
+              </div>
+              {showCustomYear && (
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="number"
+                    value={customYear}
+                    onChange={(e) => setCustomYear(e.target.value)}
+                    placeholder="VD: 2013"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = parseInt(customYear, 10)
+                      if (!isNaN(val) && val >= 1900 && val <= 2100) {
+                        if (!yearOptions.includes(val) && !extraYears.includes(val)) {
+                          setExtraYears(prev => [...prev, val])
+                        }
+                        setAcademicYear(String(val))
+                        setShowCustomYear(false)
+                        setCustomYear('')
+                      } else {
+                        toast.error('Năm không hợp lệ')
+                      }
+                    }}
+                    className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Thêm
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Training Program */}

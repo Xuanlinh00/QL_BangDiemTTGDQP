@@ -94,7 +94,7 @@ router.post('/', upload.array('files', 10), handleMulterError, async (req: Reque
 
     // Create media metadata (no binary data in MongoDB)
     const media = files.map(f => ({
-      fileName: f.originalname,
+      fileName: Buffer.from(f.originalname, 'latin1').toString('utf8'),
       mimeType: f.mimetype,
     }))
 
@@ -157,7 +157,7 @@ router.put('/:id', upload.array('files', 10), handleMulterError, async (req: Req
     // Add new media files (metadata only in MongoDB)
     const newFiles = (req.files as Express.Multer.File[] || [])
     for (const f of newFiles) {
-      item.media.push({ fileName: f.originalname, mimeType: f.mimetype } as any)
+      item.media.push({ fileName: Buffer.from(f.originalname, 'latin1').toString('utf8'), mimeType: f.mimetype } as any)
     }
 
     await item.save()
@@ -217,6 +217,33 @@ router.post('/seed', async (_req, res) => {
 
     const items = await CenterActivity.insertMany(defaults)
     res.json({ success: true, data: items })
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: { message: err.message } })
+  }
+})
+
+// ── Fix encoding of existing media filenames ──
+router.post('/fix-encoding', async (_req: Request, res: Response) => {
+  try {
+    const all = await CenterActivity.find()
+    let fixed = 0
+
+    for (const act of all) {
+      let changed = false
+      for (const m of act.media) {
+        try {
+          const decoded = Buffer.from(m.fileName, 'latin1').toString('utf8')
+          if (decoded !== m.fileName && !decoded.includes('\ufffd')) {
+            m.fileName = decoded
+            changed = true
+            fixed++
+          }
+        } catch {}
+      }
+      if (changed) await act.save()
+    }
+
+    res.json({ success: true, fixed })
   } catch (err: any) {
     res.status(500).json({ success: false, error: { message: err.message } })
   }

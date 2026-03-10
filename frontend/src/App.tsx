@@ -8,7 +8,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Documents from './pages/Documents'
 import Decisions from './pages/Decisions'
-import Reports from './pages/Reports'
+// ...existing code...
 import Settings from './pages/Settings'
 import About from './pages/About'
 import PublicAbout from './pages/PublicAbout'
@@ -52,7 +52,7 @@ export default function App() {
               <Route path="about" element={<About />} />
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
-              <Route path="reports" element={<Reports />} />
+              {/* Báo cáo đã bị loại bỏ */}
               <Route path="settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

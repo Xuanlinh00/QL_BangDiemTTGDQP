@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { validate, schemas } from '../middleware/validation.middleware'
-import { uploadLimiter } from '../middleware/rateLimiter.middleware'
+import { uploadLimiter } from '../middleware/rate-limiter.middleware'
 import axios from 'axios'
 import ExcelJS from 'exceljs'
 import path from 'path'

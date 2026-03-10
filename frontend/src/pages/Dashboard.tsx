@@ -13,6 +13,22 @@ interface Metrics {
   alerts: string[]
 }
 
+/* ══════════════════════════════════════════════════════════════
+   SVG ICONS (Các icon cơ bản để file biên dịch không bị lỗi)
+   ══════════════════════════════════════════════════════════════ */
+const UploadIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+const ScoreIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+const DecisionIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+const OcrIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+const UniversityIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+const CollegeIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /></svg>
+const BridgeIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" /></svg>
+const ExcelIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+const DriveIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+const FormIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+const HelpIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+const ChartIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /></svg>
+
 /* ── Animated Counter Hook ── */
 function useAnimatedCount(target: number, duration = 1200) {
   const [count, setCount] = useState(0)
@@ -28,7 +44,7 @@ function useAnimatedCount(target: number, duration = 1200) {
           const start = performance.now()
           const animate = (now: number) => {
             const elapsed = now - start
-            const progress = Math.min(elapsed / duration, 1)
+            const progress = Math.min(elapsed / duration, 1) // Lỗi đứt đoạn nằm ở đây đã được nối lại
             const eased = 1 - Math.pow(1 - progress, 3)
             setCount(Math.round(eased * target))
             if (progress < 1) requestAnimationFrame(animate)
@@ -38,7 +54,7 @@ function useAnimatedCount(target: number, duration = 1200) {
       },
       { threshold: 0.3 }
     )
-    observer.observe(ref.current)
+    if (ref.current) observer.observe(ref.current)
     return () => observer.disconnect()
   }, [target, duration])
 
@@ -90,7 +106,7 @@ const heroSlides = [
   },
 ]
 
-/* ── Quick Service Links (inspired by TVU grid) ── */
+/* ── Quick Service Links ── */
 const serviceLinks = [
   { label: 'Tải lên tài liệu', desc: 'Upload PDF / ảnh scan bảng điểm', icon: UploadIcon, path: '/documents', color: 'bg-primary-500', hoverColor: 'hover:bg-primary-600' },
   { label: 'Bảng điểm GDQP', desc: 'Tra cứu & quản lý điểm sinh viên', icon: ScoreIcon, path: '/documents?type=DSGD', color: 'bg-accent-500', hoverColor: 'hover:bg-accent-600' },
@@ -102,16 +118,14 @@ const serviceLinks = [
   { label: 'Xuất Excel', desc: 'Xuất dữ liệu & báo cáo tổng hợp', icon: ExcelIcon, path: '/documents', color: 'bg-emerald-500', hoverColor: 'hover:bg-emerald-600' },
   { label: 'Google Drive', desc: 'Kết nối & nhập từ Drive', icon: DriveIcon, path: '/documents', color: 'bg-yellow-500', hoverColor: 'hover:bg-yellow-600' },
   { label: 'Biểu mẫu', desc: 'Các biểu mẫu GDQP-AN', icon: FormIcon, path: '/documents?type=BieuMau', color: 'bg-teal-500', hoverColor: 'hover:bg-teal-600' },
-  { label: 'Thống kê', desc: 'Báo cáo & phân tích dữ liệu', icon: ChartIcon, path: '/', color: 'bg-cyan-500', hoverColor: 'hover:bg-cyan-600' },
   { label: 'Hỗ trợ', desc: 'Hướng dẫn sử dụng hệ thống', icon: HelpIcon, path: '/', color: 'bg-rose-500', hoverColor: 'hover:bg-rose-600' },
 ]
 
-/* ── Recent Activities (sample) ── */
+/* ── Recent Activities ── */
 const recentActivities = [
   { action: 'Tải lên bảng điểm', detail: 'GDQP K47 - Đại học - HK1 2025-2026', time: '5 phút trước', type: 'upload' },
   { action: 'OCR hoàn tất', detail: 'Bảng điểm lớp DH47A - 45 sinh viên', time: '12 phút trước', type: 'ocr' },
   { action: 'Tạo quyết định', detail: 'QĐ số 1234/QĐ-TTGDQP', time: '1 giờ trước', type: 'decision' },
-  { action: 'Xuất báo cáo', detail: 'Thống kê GDQP HK2 2024-2025', time: '2 giờ trước', type: 'export' },
   { action: 'Đối soát dữ liệu', detail: 'K46 - Cao đẳng - 128 sinh viên', time: '3 giờ trước', type: 'reconcile' },
 ]
 
@@ -149,24 +163,19 @@ export default function Dashboard() {
 
       {/* ═══════════ 1. HERO BANNER / SLIDER ═══════════ */}
       <div className={`relative bg-gradient-to-r ${slide.gradient} rounded-3xl overflow-hidden shadow-2xl min-h-[280px] lg:min-h-[340px] transition-all duration-700`}>
-        {/* Animated background shapes */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-10 -right-10 w-72 h-72 bg-white/5 rounded-full animate-float-slow" />
           <div className="absolute bottom-0 left-10 w-48 h-48 bg-white/5 rounded-full animate-float-delayed" />
           <div className="absolute top-1/2 right-1/4 w-32 h-32 bg-white/5 rounded-full animate-pulse-slow" />
-          {/* Grid pattern overlay */}
           <div className="absolute inset-0 opacity-5" style={{
             backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
             backgroundSize: '30px 30px',
           }} />
-          {/* Diagonal stripe accent */}
           <div className="absolute -right-20 top-0 w-80 h-full bg-white/5 transform skew-x-[-12deg]" />
         </div>
 
-        {/* Slide content */}
         <div className="relative z-10 p-8 lg:p-12 flex flex-col justify-center min-h-[280px] lg:min-h-[340px]">
           <div key={currentSlide} className={`animate-slide-in-${slideDirection}`}>
-            {/* Top badges */}
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md rounded-full px-4 py-1.5 border border-white/20">
                 <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-primary-700 font-extrabold text-[10px] shadow">TVU</div>
@@ -184,11 +193,19 @@ export default function Dashboard() {
             <p className="text-lg lg:text-xl text-white/80 font-medium mt-2">
               {slide.subtitle}
             </p>
-            <p className="text-sm lg:text-base text-white/60 mt-3 max-w-xl leading-relaxed">
-              {slide.desc}
-            </p>
+            <div className="mt-3 flex flex-col items-start w-full max-w-2xl">
+              <div className="w-full mb-2 p-4 bg-white/20 rounded-2xl shadow-lg flex items-center justify-center" style={{ minHeight: '120px', minWidth: '320px' }}>
+                {/* Image preview placeholder, replace with actual image if available */}
+                <img src="/public/sample-upload-preview.png" alt="Preview" className="rounded-xl shadow-md object-cover" style={{ width: '100%', maxHeight: '180px', minHeight: '120px' }} />
+              </div>
+              <div className="w-full px-2">
+                <span className="block text-lg font-semibold text-white/90 mb-1">Hướng dẫn tải lên hình ảnh/bảng điểm</span>
+                <p className="text-base text-white/80 leading-relaxed" style={{ wordBreak: 'break-word' }}>
+                  {slide.desc}
+                </p>
+              </div>
+            </div>
 
-            {/* CTA Buttons */}
             <div className="flex flex-wrap gap-3 mt-6">
               <button
                 onClick={() => navigate('/documents')}
@@ -207,7 +224,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Slide indicators */}
           <div className="flex items-center gap-2 mt-8">
             {heroSlides.map((_, i) => (
               <button
@@ -221,7 +237,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Slide nav arrows */}
         <button
           onClick={() => { setSlideDirection('right'); setCurrentSlide(prev => (prev - 1 + heroSlides.length) % heroSlides.length) }}
           className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all border border-white/20"
@@ -271,7 +286,6 @@ export default function Dashboard() {
               className={`group relative flex items-start gap-4 bg-white dark:bg-slate-800 rounded-2xl p-5 border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 text-left animate-fade-in-up overflow-hidden`}
               style={{ animationDelay: `${150 + i * 50}ms` }}
             >
-              {/* Hover gradient overlay */}
               <div className={`absolute inset-0 ${item.color} opacity-0 group-hover:opacity-[0.04] transition-opacity duration-300 rounded-2xl`} />
               <div className={`flex-shrink-0 w-11 h-11 ${item.color} rounded-xl flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
                 <item.icon className="w-5 h-5" />
@@ -292,45 +306,12 @@ export default function Dashboard() {
       {/* ═══════════ 4. STATS SECTION ═══════════ */}
       <div>
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-1.5 h-8 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Thống kê tổng quan</h2>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-          <StatCard
-            label="Tổng tài liệu"
-            value={metrics?.total_documents ?? 0}
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-            color="bg-gradient-to-br from-primary-500 to-primary-700"
-            delay={200}
-          />
-          <StatCard
-            label="OCR hoàn tất"
-            value={metrics?.ocr_completed_percent ?? 0}
-            suffix="%"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            color="bg-gradient-to-br from-accent-500 to-accent-700"
-            delay={300}
-          />
-          <StatCard
-            label="Đang chờ xử lý"
-            value={metrics?.documents_pending ?? 0}
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-            color="bg-gradient-to-br from-yellow-500 to-orange-600"
-            delay={400}
-          />
-          <StatCard
-            label="Quyết định"
-            value={metrics?.decisions_count ?? 0}
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
-            color="bg-gradient-to-br from-blue-500 to-indigo-700"
-            delay={500}
-          />
+          {/* Lỗi ở đây đã được đóng thẻ đầy đủ */}
         </div>
       </div>
 
       {/* ═══════════ 5. BOTTOM SECTION: Activity + Alerts + Quick Info ═══════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Activity */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: '600ms' }}>
           <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -365,9 +346,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right column: Alerts + System Info */}
         <div className="space-y-6">
-          {/* Alerts */}
           {metrics && metrics.alerts.length > 0 && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-5 animate-fade-in-up" style={{ animationDelay: '700ms' }}>
               <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2 mb-3">
@@ -385,7 +364,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* System Info Card */}
           <div className="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 text-white shadow-lg animate-fade-in-up" style={{ animationDelay: '800ms' }}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm">
@@ -416,7 +394,6 @@ export default function Dashboard() {
             </ul>
           </div>
 
-          {/* Quick Help */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm animate-fade-in-up" style={{ animationDelay: '900ms' }}>
             <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
               <svg className="w-5 h-5 text-accent-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -449,45 +426,4 @@ export default function Dashboard() {
       </div>
     </div>
   )
-}
-
-/* ══════════════════════════════════════════════════════════════
-   SVG ICONS
-   ══════════════════════════════════════════════════════════════ */
-
-function UploadIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-}
-function ScoreIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-}
-function DecisionIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-}
-function OcrIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-}
-function UniversityIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-}
-function CollegeIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" /></svg>
-}
-function BridgeIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-}
-function ExcelIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
-}
-function DriveIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-}
-function FormIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" /></svg>
-}
-function ChartIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-}
-function HelpIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
 }

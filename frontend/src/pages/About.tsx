@@ -56,10 +56,13 @@ function getCategoryColor(cat: string) {
 
 export default function About() {
   const [activities, setActivities] = useState<Activity[]>([])
-  const [showModal, setShowModal] = useState(false)
+  const [showModal, setShowModal] = useState(false) // Modal đăng bài
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [expandedPost, setExpandedPost] = useState<string | null>(null)
   const [filterCategory, setFilterCategory] = useState<string>('all')
+  
+  // State quản lý việc xem ảnh/video toàn màn hình
+  const [mediaModal, setMediaModal] = useState<{ type: 'image' | 'video', url: string } | null>(null)
 
   const loadActivities = useCallback(async () => {
     try {
@@ -120,7 +123,7 @@ export default function About() {
                 TRUNG TÂM GIÁO DỤC QUỐC PHÒNG VÀ AN NINH
               </h3>
               <p className="text-white/80 text-sm mt-1">Trường Đại học Trà Vinh &bull; TVU</p>
-              <p className="text-white/70 text-xs mt-0.5">Center of National Defense and Security Education, Tra Vinh University</p>
+              <p className="text-white/70 text-xs mt-0.5">....</p>
             </div>
           </div>
         </div>
@@ -136,7 +139,7 @@ export default function About() {
               <span className="text-lg">📞</span>
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Điện thoại liên lạc</p>
-                <p className="font-medium text-gray-800 dark:text-slate-200">(84).294.3855246</p>
+                <p className="font-medium text-gray-800 dark:text-slate-200">(((((</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -281,19 +284,23 @@ export default function About() {
                       const mediaUrl = activitiesApi.getMediaUrl(activity._id, idx)
                       const isVideo = m.mimeType.startsWith('video/')
                       return isVideo ? (
-                        <video
-                          key={m._id || idx}
-                          src={mediaUrl}
-                          controls
-                          className="w-full rounded-xl border border-gray-200 dark:border-slate-600 max-h-80 object-cover"
-                        />
+                        <div key={m._id || idx} className="relative">
+                          <video
+                            src={mediaUrl}
+                            controls
+                            className="w-full rounded-xl border border-gray-200 dark:border-slate-600 max-h-80 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setMediaModal({ type: 'video', url: mediaUrl })}
+                          />
+                        </div>
                       ) : (
-                        <img
-                          key={m._id || idx}
-                          src={mediaUrl}
-                          alt={m.fileName}
-                          className="w-full rounded-xl border border-gray-200 dark:border-slate-600 max-h-80 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                        />
+                        <div key={m._id || idx} className="relative">
+                          <img
+                            src={mediaUrl}
+                            alt={m.fileName}
+                            className="w-full rounded-xl border border-gray-200 dark:border-slate-600 max-h-80 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setMediaModal({ type: 'image', url: mediaUrl })}
+                          />
+                        </div>
                       )
                     })}
                   </div>
@@ -340,6 +347,28 @@ export default function About() {
           </details>
         )}
       </div>
+
+      {/* ═══ TRÌNH XEM ẢNH/VIDEO (Lightbox) ═══ */}
+      {mediaModal && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 transition-opacity" 
+          onClick={() => setMediaModal(null)}
+        >
+          <div className="relative max-w-5xl w-full flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+            <button 
+              className="absolute -top-12 right-0 md:-right-12 text-white/70 hover:text-white text-4xl font-light hover:scale-110 transition-all" 
+              onClick={() => setMediaModal(null)}
+            >
+              &times;
+            </button>
+            {mediaModal.type === 'image' ? (
+              <img src={mediaModal.url} alt="Preview" className="max-w-full max-h-[85vh] rounded-xl shadow-2xl object-contain" />
+            ) : (
+              <video src={mediaModal.url} controls autoPlay className="max-w-full max-h-[85vh] rounded-xl shadow-2xl bg-black" />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Activity Add/Edit Modal */}
       {showModal && (

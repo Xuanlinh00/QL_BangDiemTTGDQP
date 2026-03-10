@@ -1,9 +1,22 @@
 import { Router, Request, Response } from 'express'
 import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { DocumentModel, StudentRecord } from '../models'
 
 const router = Router()
-const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+
+// ── File storage on local disk ──
+const UPLOADS_DIR = path.resolve(__dirname, '../../uploads/docstore')
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+}
+
+function getFilePath(docId: string, mimeType?: string): string {
+  const ext = mimeType?.includes('spreadsheet') || mimeType?.includes('excel') ? '.xlsx' : '.pdf'
+  return path.join(UPLOADS_DIR, `${docId}${ext}`)
+}
 
 // ── List all documents ──
 router.get('/', async (_req: Request, res: Response) => {
@@ -39,14 +52,18 @@ router.post('/upload', upload.array('files', 20), async (req: Request, res: Resp
         cohort,
         className,
         trainingProgram,
-        fileData: f.buffer,
       } as any)
-      const { fileData, ...rest } = doc.toObject()
-      created.push(rest)
+
+      // Save file to local disk instead of MongoDB
+      const filePath = getFilePath(doc._id.toString(), f.mimetype)
+      fs.writeFileSync(filePath, f.buffer)
+
+      created.push(doc.toObject())
     }
 
     res.json({ success: true, data: created })
   } catch (err: any) {
+    console.error('Docstore upload error:', err)
     res.status(500).json({ success: false, error: err.message })
   }
 })
@@ -70,11 +87,24 @@ router.post('/gdrive', async (req: Request, res: Response) => {
 router.get('/:id/file', async (req: Request, res: Response) => {
   try {
     const doc = await DocumentModel.findById(req.params.id)
-    if (!doc?.fileData) return res.status(404).json({ success: false, error: 'No file data' })
+    if (!doc) return res.status(404).json({ success: false, error: 'Not found' })
 
-    res.set('Content-Type', doc.mimeType || 'application/pdf')
-    res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`)
-    res.send(doc.fileData)
+    // Try local disk first
+    const filePath = getFilePath(doc._id.toString(), doc.mimeType)
+    if (fs.existsSync(filePath)) {
+      res.set('Content-Type', doc.mimeType || 'application/pdf')
+      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`)
+      return res.send(fs.readFileSync(filePath))
+    }
+
+    // Fallback to MongoDB fileData (legacy)
+    if (doc.fileData) {
+      res.set('Content-Type', doc.mimeType || 'application/pdf')
+      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`)
+      return res.send(doc.fileData)
+    }
+
+    res.status(404).json({ success: false, error: 'No file data' })
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
   }
@@ -98,7 +128,13 @@ router.put('/:id', async (req: Request, res: Response) => {
 // ── Delete document ──
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await DocumentModel.findByIdAndDelete(req.params.id)
+    const doc = await DocumentModel.findById(req.params.id)
+    if (doc) {
+      // Clean up file on disk
+      const filePath = getFilePath(doc._id.toString(), doc.mimeType)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+      await doc.deleteOne()
+    }
     // Also clean up student records for this document
     await StudentRecord.deleteMany({ docId: req.params.id })
     res.json({ success: true })

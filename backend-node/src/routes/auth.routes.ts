@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { logger } from '../config/logger'
-import { authLimiter } from '../middleware/rateLimiter.middleware'
+import { authLimiter } from '../middleware/rate-limiter.middleware'
 import { validate, schemas } from '../middleware/validation.middleware'
 
 const router = Router()

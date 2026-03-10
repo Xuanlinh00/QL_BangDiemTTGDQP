@@ -245,6 +245,21 @@ router.post('/fix-encoding', async (_req: Request, res: Response) => {
     const remaining = await DecisionFile.find().select('-fileData')
     for (const f of remaining) {
       try {
+        // Only attempt latin1→utf8 if the filename contains characters in the latin1 range
+        // that look like mojibake (bytes > 0x7F but < 0x100). Skip if already clean UTF-8.
+        const hasLatin1Mojibake = /[\u0080-\u00ff]/.test(f.fileName)
+        if (!hasLatin1Mojibake) {
+          // Also fix U+0010 corruption (Đ stripped to its low byte)
+          if (/\u0010/.test(f.fileName)) {
+            const corrected = f.fileName.replace(/\u0010/g, 'Đ')
+            const m = corrected.match(/^(\d+)[.\s]*[QqĐđ]/)
+            await DecisionFile.findByIdAndUpdate(f._id, {
+              $set: { fileName: corrected, number: m ? m[1] : f.number }
+            })
+            fixed++
+          }
+          continue
+        }
         const decoded = Buffer.from(f.fileName, 'latin1').toString('utf8')
         if (decoded !== f.fileName && !decoded.includes('\ufffd')) {
           const m = decoded.match(/^(\d+)[.\s]*[QqĐđ]/)
