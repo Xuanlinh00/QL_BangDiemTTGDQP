@@ -200,7 +200,9 @@ export default function Documents() {
       const matchesProg = !selectedProgram || docProg === selectedProgram
       const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
       const matchesYear = !selectedYear || docYear === selectedYear
-      const matchesSearch = q === '' || doc.name.toLowerCase().includes(q)
+      // Tìm kiếm theo tên file, tên lớp, cohort, trainingProgram
+      const searchFields = [doc.name, doc.className, doc.cohort, doc.trainingProgram]
+      const matchesSearch = q === '' || searchFields.some(f => typeof f === 'string' && f.toLowerCase().includes(q))
       const matchesType = filterType === 'all' || doc.type === filterType
       return matchesProg && matchesYear && matchesSearch && matchesType
     })
