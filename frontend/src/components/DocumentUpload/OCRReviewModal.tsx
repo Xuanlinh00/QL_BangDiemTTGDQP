@@ -169,29 +169,77 @@ function recordsToApiShape(records: StudentRecord[]) {
 // ── OCR text normalizer: sửa lỗi nhận dạng phổ biến của Tesseract ────────────
 function normalizeOcrText(raw: string): string {
   let text = raw.replace(/\r/g, '')
-  // Sửa O/o/Q → 0 khi kẹp giữa 2 chữ số (OCR nhầm 0 vs O)
-  text = text.replace(/(\d)[OoQq](\d)/g, '$10$2')
-  // Sửa l/I/| → 1 khi kẹp giữa 2 chữ số
-  text = text.replace(/(\d)[lI|](\d)/g, '$11$2')
-  // Sửa dấu thập phân bị tách: "9 . 8" → "9.8"
-  // Chú ý: KHÔNG áp dụng khi → tạo thành ngày/tháng (dd/mm)
-  text = text.replace(/(\d)\s*[.,]\s*(\d)/g, (m, a, b) => {
-    // Nếu là phân cách ngày: ký tự trước là '/' hoặc '\n' → giữ nguyên
-    return `${a}.${b}`
-  })
-  // Ghép chuỗi số bị tách 1–2 cách TRONG CÙNG 1 DÒN để khôi phục MSSV
-  // NHƯNG chỉ ghép khi kết quả KHÔNG phải ngày sinh (không có dấu / ở kề bên)
-  // và kết quả có độ dài hợp lệ MSSV (7-10 chữ số)
-  // Dùng chiến lược: ghép trong mỗi «cụm số»  (không qua dấu / - khoảng cách lớn)
-  text = text.replace(/\b(\d) {1,2}(\d)/g, (full, a, b, offset, src) => {
-    // Không ghép nếu xung quanh có ký tự / hoặc - (dấu ngày tháng)
-    const before = src[offset - 1] ?? ''
-    const after  = src[offset + full.length] ?? ''
-    if (before === '/' || before === '-' || after === '/' || after === '-') return full
-    return `${a}${b}`
-  })
-  // Xóa ký tự nhiễu đầu dòng từ Tesseract
+  
+  // ✅ Sửa O/o/Q/D → 0 khi kẹp giữa 2 chữ số hoặc đầu số (OCR nhầm 0 vs O)
+  text = text.replace(/(\d)[OoQqD](\d)/g, '$10$2')
+  text = text.replace(/\b[OoQD](\d{6,})/g, '0$1')  // Đầu MSSV: O10122001 → 010122001
+  
+  // ✅ Sửa l/I/|/i → 1 khi kẹp giữa 2 chữ số hoặc đầu số
+  text = text.replace(/(\d)[lI|i](\d)/g, '$11$2')
+  text = text.replace(/\b[lI|](\d{8,})/g, '1$1')  // Đầu MSSV: l10122001 → 110122001
+  
+  // ✅ Sửa S/s → 5 khi trong chuỗi số
+  text = text.replace(/(\d)[Ss](\d)/g, '$15$2')
+  
+  // ✅ Sửa B → 8, G → 6 khi trong chuỗi số
+  text = text.replace(/(\d)[B](\d)/g, '$18$2')
+  text = text.replace(/(\d)[G](\d)/g, '$16$2')
+  
+  // ✅ Sửa dấu thập phân bị tách: "9 . 8" → "9.8" hoặc "9 , 8" → "9.8"
+  text = text.replace(/(\d)\s*[.,]\s*(\d)/g, '$1.$2')
+  
+  // ✅ Sửa các lỗi OCR phổ biến trong tên tiếng Việt
+  text = text.replace(/\bKinr\b/g, 'Kim')
+  text = text.replace(/\bHtra\b/g, 'Hua')
+  text = text.replace(/\bL6\b/g, 'Lê')
+  text = text.replace(/\bVin\b/g, 'Văn')
+  text = text.replace(/\bNguy6n\b/g, 'Nguyễn')
+  text = text.replace(/\bTr6n\b/g, 'Trần')
+  text = text.replace(/\bPh4m\b/g, 'Phạm')
+  text = text.replace(/\bHo4ng\b/g, 'Hoàng')
+  text = text.replace(/\bD6ng\b/g, 'Đông')
+  text = text.replace(/\bDing\b/g, 'Đăng')
+  text = text.replace(/\bDtrng\b/g, 'Dũng')
+  text = text.replace(/\bTh4ch\b/g, 'Thạch')
+  text = text.replace(/\bTrucrng\b/g, 'Trương')
+  text = text.replace(/\bDo4n\b/g, 'Đoàn')
+  
+  // ✅ Sửa kết quả bị lỗi
+  text = text.replace(/\bD\?t\b/g, 'Đạt')
+  text = text.replace(/\bDat\b/g, 'Đạt')
+  text = text.replace(/\bKh6ng\b/g, 'Không')
+  text = text.replace(/\bdat\b/g, 'đạt')
+  
+  // ✅ Sửa xếp loại bị lỗi
+  text = text.replace(/\bKh6\b/g, 'Khá')
+  text = text.replace(/\bKha\b/g, 'Khá')
+  text = text.replace(/\bGioi\b/g, 'Giỏi')
+  text = text.replace(/\bC\s*ioi\b/g, 'Giỏi')
+  text = text.replace(/\bC\s*T\b/g, 'CT')
+  
+  // ✅ Ghép chuỗi số bị tách (MSSV bị tách thành "1 1 0 1 2 2 0 0 1")
+  // Ghép tối đa 3 lần để xử lý các trường hợp tách nhiều
+  for (let i = 0; i < 3; i++) {
+    text = text.replace(/\b(\d{1,3})(\s+)(\d{1,3})(?=\s+\d|\s*$)/g, (full, a, space, b, offset, src) => {
+      // Không ghép nếu xung quanh có ký tự / hoặc - (dấu ngày tháng)
+      const before = src[offset - 1] ?? ''
+      const after = src[offset + full.length] ?? ''
+      if (before === '/' || before === '-' || after === '/' || after === '-') return full
+      // Không ghép nếu khoảng cách quá lớn (>3 spaces = cột khác)
+      if (space.length > 3) return full
+      return `${a}${b}`
+    })
+  }
+  
+  // ✅ Sửa MSSV prefix bị nhầm: "0A210001" → "DA210001"
+  text = text.replace(/\b0([A-Z]{1,2}\d{5,8})\b/g, 'D$1')
+  
+  // ✅ Xóa ký tự nhiễu đầu dòng từ Tesseract
   text = text.replace(/^[\[\]{}|\\<>@#$%^&*~`]+/gm, '')
+  
+  // ✅ Chuẩn hóa khoảng trắng: nhiều space → 1 space (trừ xuống dòng)
+  text = text.replace(/ {2,}/g, '  ')  // Giữ 2 spaces để parser nhận cột
+  
   return text
 }
 
@@ -203,139 +251,128 @@ function normalizeOcrText(raw: string): string {
 //  Supports both column orders:
 //   A) STT  NAME  MSSV  CLASS  SCORES
 //   B) STT  MSSV  NAME  DATE  GENDER  SCORES  (TVU "Danh Sach Ghi Diem")
+//  Pass 3 – TVU old format: STT  MSSV(07.606.01691)  NAME  DATE  SCORES
 function parseRecordsFromColumnText(
   rawText: string,
   docType: string,
 ): { records: StudentRecord[]; meta: ExtractMeta } | null {
   if (docType !== 'DSGD') return null
 
-  // TVU MSSV: 9-digit starting with 1 (110122001), prefixed (DA210001), or 7-10 plain digits
-  const MSSV_RE      = /^([A-Z]{0,3}\d{5,12}|1\d{8}|\d{7,10})$/
+  // ✅ Normalize text trước khi parse
+  const normalizedText = normalizeOcrText(rawText)
+
+  // ✅ TVU MSSV patterns (cải thiện):
+  // - Format mới (2015+): 110122001, 112522006, DA210001
+  // - Format cũ (<2015): 07.606.01691, 06.606.01234 (có dấu chấm)
+  // - 7-10 chữ số thuần: 2100123
+  // ⚠️ KHÔNG khớp: năm (2020, 2024), STT (1, 2, 3), điểm (7.5, 10)
+  const MSSV_RE      = /^([A-Z]{1,3}\d{5,10}|1[01]\d{7,8}|\d{2}\.\d{3}\.\d{5}|\d{7,10})$/
   const SCORE_RE_TOK = /^(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)$/
   const SCORE_INLINE = /\b(10(?:[.,]\d{1,2})?|[0-9](?:[.,]\d{1,2})?)\b/g
-  const LOP_RE       = /^[A-Z]{1,4}\d{2}[A-Z][A-Z0-9]{0,10}$/
+  // ✅ Lớp TVU: 2-4 chữ hoa + 2 số + ít nhất 1 chữ (DA21TYC, DT20A, CC21A2, CA21CKC)
+  const LOP_RE       = /^[A-Z]{2,4}\d{2}[A-Z][A-Z0-9]{0,10}$/
   const STT_RE       = /^\d{1,3}$/
   const DATE_RE_TOK  = /^\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?$/
   const DATE_INLINE  = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/
   const VIET_CAP     = /^[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯẮẶẰẲẴẺẼẾỀỂỄỆỈỊỌỘỒỔỖỚỜỞỠỢỤỦỨỪỮỰỲỴỶỸ]/
 
   // Extract doc-level metadata
-  // "Nhóm/Lớp: (01 - 02)/DA22TTA"  OR  "Lớp: DA21TYC"
+  // "Nhóm/Lớp: (01 - 02)/DA22TTA"  OR  "Lớp: DA21TYC" OR "CA21CKC-CDD5801"
   const lopMeta = (
-    rawText.match(/(?:Nhóm\/Lớp|NHÓM\/LỚP)[\s:()\d\- ]*\/\s*([A-Z0-9]{4,20})/i)
-    ?? rawText.match(/(?:MÃ\s+LỚP|LỚP)[:\s]+([A-Z0-9]{2,20})/i)
+    normalizedText.match(/(?:Nhóm\/Lớp|NHÓM\/LỚP)[\s:()\d\- ]*\/\s*([A-Z0-9]{4,20})/i)
+    ?? normalizedText.match(/(?:MÃ\s+LỚP|LỚP)[:\s]+([A-Z0-9]{2,20})/i)
+    ?? normalizedText.match(/\b([A-Z]{2,4}\d{2}[A-Z]{2,10})-[A-Z0-9]+/i)  // CA21CKC-CDD5801
   )?.[1]?.trim() ?? ''
-  const monMeta = rawText.match(/(?:Học phần|HỌC PHẦN|MÔN)[:\s]+(.{5,80}?)(?:\n|$)/im)?.[1]?.trim() ?? ''
+  const monMeta = normalizedText.match(/(?:Học phần|HỌC PHẦN|MÔN)[:\s]+(.{5,80}?)(?:\n|$)/im)?.[1]?.trim() ?? ''
 
   function isNameTok(tok: string): boolean {
     if (!VIET_CAP.test(tok)) return false
     if (MSSV_RE.test(tok) || LOP_RE.test(tok) || DATE_RE_TOK.test(tok)) return false
     if (SCORE_RE_TOK.test(tok.replace(',', '.'))) return false
     if (STT_RE.test(tok)) return false
-    if (/^(Nam|Nữ|Phái|KT|TB|QT|Phòng|TT|HP|Lần|QP|AN|GDQP|CBGD|CBCT|ĐT|ĐH|CĐ)$/i.test(tok)) return false
+    if (/^(Nam|Nữ|Phái|KT|TB|QT|Phòng|TT|HP|Lần|QP|AN|GDQP|CBGD|CBCT|ĐT|ĐH|CĐ|Gioi|Kha|Dat)$/i.test(tok)) return false
     return true
   }
 
-  const lines = rawText.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(l => l.length > 1)
+  const lines = normalizedText.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(l => l.length > 1)
   const records: StudentRecord[] = []
   const seenMssv = new Set<string>()
 
   for (const line of lines) {
     if (/^(STT|TT\b|HỌ\b|TÊN\b|MSSV|MÃ\s*SV|LỚP|ĐIỂM|KẾT|GHI|===|TRANG|BẢNG|DANH|TRƯỜNG|BỘ|KHOA|MÔN|MÃ\b|NGÀY|HỘI\s*ĐỒNG)/i.test(line)) continue
 
-    // Pass 1: 2+-space column split
-    const cols = line.split(/\s{2,}/).map(c => c.trim()).filter(Boolean)
-    let mssvIdx = -1
-    for (let i = 0; i < cols.length; i++) {
-      if (MSSV_RE.test(cols[i]) && !/^(19|20)\d{2}$/.test(cols[i])) { mssvIdx = i; break }
-    }
-
-    // Pass 2: single-space token fallback
-    let mssvViaToken = ''
-    if (mssvIdx < 0) {
-      for (const tok of line.split(/\s+/)) {
-        if (MSSV_RE.test(tok) && !/^(19|20)\d{2}$/.test(tok)) {
-          if (tok.length < 7 && /^\d+$/.test(tok)) continue
-          mssvViaToken = tok; break
-        }
-      }
-      if (!mssvViaToken) continue
-    }
-
-    const mssv = mssvIdx >= 0 ? cols[mssvIdx] : mssvViaToken
+    // ✅ Pass 1: Tìm MSSV format cũ (07.606.01691) hoặc mới (110122001)
+    // MSSV có thể ở đầu dòng hoặc sau STT
+    const mssvMatch = line.match(/\b(\d{2}\.\d{3}\.\d{5}|1[01]\d{7,8}|[A-Z]{1,3}\d{5,10})\b/)
+    if (!mssvMatch) continue
+    
+    const mssv = mssvMatch[1]
     if (seenMssv.has(mssv)) continue
     seenMssv.add(mssv)
 
-    let ho_ten = '', lop = lopMeta
-    const allScores: number[] = []
-    let ghi_chu = ''
+    // Tách dòng thành các phần: trước MSSV, MSSV, sau MSSV
+    const mssvPos = line.indexOf(mssv)
+    const beforeMssv = line.slice(0, mssvPos).trim()
+    const afterMssv = line.slice(mssvPos + mssv.length).trim()
 
-    if (mssvIdx >= 0) {
-      const hasStt = STT_RE.test(cols[0])
-      const ns = hasStt ? 1 : 0
-      ho_ten = cols.slice(ns, mssvIdx).filter(isNameTok).join(' ').trim()
-      if (!ho_ten) {
-        const parts: string[] = []
-        for (let i = mssvIdx + 1; i < cols.length; i++) {
-          if (isNameTok(cols[i])) parts.push(cols[i])
-          else if (!DATE_RE_TOK.test(cols[i])) break
-        }
-        ho_ten = parts.join(' ').trim()
-      }
-      for (let i = mssvIdx + 1; i < cols.length; i++) {
-        if (SCORE_RE_TOK.test(cols[i].replace(',', '.'))) {
-          const n = parseFloat(cols[i].replace(',', '.'))
-          if (!isNaN(n)) allScores.push(n)
-        }
-      }
-      if (!lop) for (const c of cols) { if (LOP_RE.test(c) && c !== mssv) { lop = c; break } }
-      if (allScores.length >= 3) {
-        for (let i = cols.length - 1; i > mssvIdx; i--) {
-          const c = cols[i]
-          if (!SCORE_RE_TOK.test(c.replace(',', '.')) && !DATE_RE_TOK.test(c) && isNaN(parseFloat(c))) { ghi_chu = c; break }
+    // STT: số đầu dòng (nếu có)
+    const sttMatch = beforeMssv.match(/^(\d{1,3})/)
+    const stt = sttMatch ? sttMatch[1] : String(records.length + 1)
+
+    // Tên: phần còn lại trước MSSV (sau khi bỏ STT)
+    let ho_ten = beforeMssv.replace(/^\d{1,3}\s*/, '').trim()
+    
+    // Nếu không có tên trước MSSV → tên ở sau MSSV (format: STT MSSV NAME DATE...)
+    if (!ho_ten || ho_ten.length < 3) {
+      // Tách các token sau MSSV
+      const tokens = afterMssv.split(/\s+/)
+      const nameParts: string[] = []
+      for (const tok of tokens) {
+        if (isNameTok(tok)) {
+          nameParts.push(tok)
+        } else if (DATE_RE_TOK.test(tok) || SCORE_RE_TOK.test(tok.replace(',', '.'))) {
+          break  // Gặp ngày sinh hoặc điểm → dừng
         }
       }
-    } else {
-      const mssvPos   = line.indexOf(mssv)
-      const beforeTxt = line.slice(0, mssvPos).replace(/^\s*\d{1,3}[\s.)]*/, '').trim()
-      const afterTxt  = line.slice(mssvPos + mssv.length).trim()
-      ho_ten = beforeTxt.split(/\s+/).filter(isNameTok).join(' ')
-      if (!ho_ten) {
-        const dateM  = afterTxt.match(DATE_INLINE)
-        SCORE_INLINE.lastIndex = 0
-        const scoreM = SCORE_INLINE.exec(afterTxt)
-        const cut    = Math.min(
-          dateM  ? (dateM.index ?? Infinity) : Infinity,
-          scoreM ? (scoreM.index ?? Infinity) : Infinity,
-        )
-        const nameSec = isFinite(cut) ? afterTxt.slice(0, cut) : afterTxt
-        ho_ten = nameSec.split(/\s+/).filter(isNameTok).join(' ')
-      }
-      SCORE_INLINE.lastIndex = 0
-      let sm: RegExpExecArray | null
-      while ((sm = SCORE_INLINE.exec(afterTxt)) !== null) {
-        const pre = afterTxt[sm.index - 1]
-        if (pre === '/' || pre === '-') continue
-        const n = parseFloat(sm[1].replace(',', '.'))
-        if (!isNaN(n)) allScores.push(n)
-      }
-      if (!lop) for (const t of line.split(/\s+/)) { if (LOP_RE.test(t) && t !== mssv) { lop = t; break } }
+      ho_ten = nameParts.join(' ')
     }
 
-    let dq: number | null = null, dl: number | null = null
-    if (allScores.length >= 3)       dq = allScores[allScores.length - 1]
-    else if (allScores.length === 2) { dq = allScores[0]; if (allScores[1] > 0) dl = allScores[1] }
-    else if (allScores.length === 1)  dq = allScores[0]
+    // Lớp: tìm trong metadata hoặc trong dòng
+    let lop = lopMeta
+    if (!lop) {
+      const lopMatch = line.match(LOP_RE)
+      if (lopMatch && lopMatch[0] !== mssv) lop = lopMatch[0]
+    }
+
+    // Điểm: tìm tất cả số giống điểm (0-10) trong phần sau MSSV
+    SCORE_INLINE.lastIndex = 0
+    const allScores: number[] = []
+    let sm: RegExpExecArray | null
+    while ((sm = SCORE_INLINE.exec(afterMssv)) !== null) {
+      const n = parseFloat(sm[1].replace(',', '.'))
+      if (!isNaN(n) && n >= 0 && n <= 10) allScores.push(n)
+    }
+
+    // Điểm QP: thường là điểm cuối cùng hoặc điểm duy nhất
+    let dq: number | null = null
+    let dl: number | null = null
+    if (allScores.length >= 2) {
+      // Nếu có nhiều điểm → lấy 2 điểm cuối (điểm TB và điểm QP)
+      dq = allScores[allScores.length - 1]
+      dl = allScores[allScores.length - 2] !== dq ? allScores[allScores.length - 2] : null
+    } else if (allScores.length === 1) {
+      dq = allScores[0]
+    }
 
     records.push({
-      stt:       mssvIdx >= 0 && STT_RE.test(cols[0]) ? cols[0] : String(records.length + 1),
-      ho_ten:    ho_ten.trim(),
+      stt,
+      ho_ten: ho_ten.trim(),
       mssv,
       lop,
-      diem_qp:   dq !== null ? String(dq) : '',
+      diem_qp: dq !== null ? String(dq) : '',
       diem_lan2: dl !== null ? String(dl) : '',
-      ket_qua:   dq !== null ? (dq >= 5 ? 'Đạt' : 'Không đạt') : '',
-      ghi_chu,
+      ket_qua: dq !== null ? (dq >= 5 ? 'Đạt' : 'Không đạt') : '',
+      ghi_chu: '',
     })
   }
 

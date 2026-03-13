@@ -2,37 +2,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 
-interface TreeNode {
-  id: string
-  label: string
-  icon: string
-  children?: TreeNode[]
-  path?: string
-}
-
-// Generate year nodes from 2014 to current year
-const currentYear = new Date().getFullYear()
-
-const documentTree: TreeNode[] = [
-  {
-    id: 'qd', label: 'Quyết định', icon: '📑',
-    path: '/decisions',
-  },
-  {
-    id: 'bm', label: 'Biểu mẫu', icon: '📝',
-    path: '/documents?type=BieuMau',
-  },
-  {
-    id: 'bd', label: 'Bảng điểm', icon: '📊',
-    path: '/documents',
-  },
-]
-
 const quickMenuItems = [
   { label: 'Trang chủ', path: '/', icon: 'home' },
   { label: 'Giới thiệu', path: '/about', icon: 'info' },
   { label: 'Quyết định', path: '/decisions', icon: 'check' },
-  // ...existing code...
+  { label: 'Bảng điểm', path: '/documents', icon: 'chart' },
+  { label: 'Biểu mẫu', path: '/documents?type=BieuMau', icon: 'database' },
   { label: 'Cài đặt', path: '/settings', icon: 'settings' },
 ]
 
@@ -40,7 +15,6 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
   const cls = className || 'w-5 h-5'
   const icons: Record<string, JSX.Element> = {
     home: <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
-    folder: <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>,
     check: <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
     database: <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>,
     chart: <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
@@ -50,55 +24,11 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
   return icons[name] || null
 }
 
-function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
-  const [expanded, setExpanded] = useState(false)
-  const navigate = useNavigate()
-  const hasChildren = node.children && node.children.length > 0
-
-  return (
-    <div>
-      <button
-        onClick={() => {
-          if (hasChildren) {
-            setExpanded(!expanded)
-          } else if (node.path) {
-            navigate(node.path)
-          }
-        }}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white transition-colors group"
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
-      >
-        {hasChildren ? (
-          <svg
-            className={`w-3.5 h-3.5 flex-shrink-0 text-slate-500 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        ) : (
-          <span className="w-3.5 h-3.5 flex-shrink-0" />
-        )}
-        <span className="flex-shrink-0">{node.icon}</span>
-        <span className="truncate">{node.label}</span>
-      </button>
-      {expanded && hasChildren && (
-        <div className="relative">
-          <div className="absolute left-4 top-0 bottom-0 w-px bg-slate-700" style={{ marginLeft: `${depth * 16}px` }} />
-          {node.children!.map(child => (
-            <TreeItem key={child.id} node={child} depth={depth + 1} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
-  const [docTreeOpen, setDocTreeOpen] = useState(true)
 
   const handleLogout = () => {
     logout()
@@ -145,36 +75,8 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Document Tree Section */}
-      {!collapsed && (
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
-          <button
-            onClick={() => setDocTreeOpen(!docTreeOpen)}
-            className="flex items-center gap-2 w-full px-3 py-2 mt-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-300 transition-colors"
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-            </svg>
-            <span className="flex-1 text-left">Tài liệu Scan</span>
-            <svg
-              className={`w-3.5 h-3.5 transition-transform duration-200 ${docTreeOpen ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {docTreeOpen && (
-            <div className="mt-1 space-y-0.5">
-              {documentTree.map(node => (
-                <TreeItem key={node.id} node={node} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {collapsed && <div className="flex-1" />}
+      {/* Spacer */}
+      <div className="flex-1" />
 
       {/* Footer */}
       <div className="p-2 border-t border-white/10 space-y-1">

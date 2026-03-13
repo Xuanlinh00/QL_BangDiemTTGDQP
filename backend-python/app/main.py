@@ -6,17 +6,20 @@ from app.config import settings
 from app.routes import ocr, extract, reconcile
 from app.routes import documentai
 from app.database.mongodb import create_indexes, close_connection
+#from app.routes.documents import router as documents_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# KHỞI TẠO app TRƯỚC
 app = FastAPI(
     title="TVU GDQP-AN Worker API",
     description="OCR and data extraction worker service",
     version="1.0.0"
 )
 
+# CÁC MIDDLEWARE
 # CORS middleware
 allowed_origins = [
     "http://localhost:5173",
@@ -33,7 +36,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes
+# GẮN CÁC ROUTER (Đưa documents_router xuống đây)
+#app.include_router(documents_router, prefix="/documents", tags=["Documents"]) # Thêm prefix và tags cho chuẩn
 app.include_router(ocr.router, prefix="/ocr", tags=["OCR"])
 app.include_router(extract.router, prefix="/extract", tags=["Extract"])
 app.include_router(reconcile.router, prefix="/reconcile", tags=["Reconcile"])
