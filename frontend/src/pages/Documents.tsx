@@ -792,7 +792,7 @@ export default function Documents() {
       {/* Table + Side Preview */}
       <div className="flex gap-4" style={{ minHeight: quickPreviewDoc ? '500px' : undefined }}>
       {/* Table */}
-      <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-auto transition-colors ${quickPreviewDoc ? 'w-1/2 xl:w-[55%]' : 'w-full'}`}>
+      <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-auto transition-colors ${quickPreviewDoc ? 'w-1/3 xl:w-[45%]' : 'w-full'}`}>
         <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700">
             <tr>
@@ -935,7 +935,7 @@ export default function Documents() {
 
       {/* Side Preview Panel (single click) */}
       {quickPreviewDoc && (
-        <div className="w-1/2 xl:w-[45%] flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-primary-200 dark:border-primary-700 overflow-hidden transition-all">
+        <div className="w-2/3 xl:w-[55%] flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-primary-200 dark:border-primary-700 overflow-hidden transition-all">
           {/* Preview header */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-primary-50 dark:bg-primary-900/20 shrink-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -1028,63 +1028,61 @@ export default function Documents() {
         />
       )}
 
-      {/* ── File Preview Modal ── */}
+      {/* ── File Preview Modal (Fullscreen) ── */}
       {previewDoc && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[95vh] flex flex-col border border-gray-200 dark:border-slate-700">
-            {/* Header */}
-            <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between shrink-0">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white truncate pr-4">
-                {previewDoc.mimeType?.includes('pdf') ? '📄' : '📊'} {previewDoc.name}
-              </h3>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => handleDownloadFile(previewDoc)}
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          {/* Header */}
+          <div className="border-b border-gray-700 px-6 py-3 flex items-center justify-between shrink-0 bg-gray-900">
+            <h3 className="text-lg font-bold text-white truncate pr-4">
+              {previewDoc.mimeType?.includes('pdf') ? '📄' : '📊'} {previewDoc.name}
+            </h3>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => handleDownloadFile(previewDoc)}
+                className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                ⬇️ Tải xuống
+              </button>
+              {previewDoc.source === 'google_drive' && previewDoc.webViewLink && (
+                <a
+                  href={previewDoc.webViewLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  ⬇️ Tải xuống
-                </button>
-                {previewDoc.source === 'google_drive' && previewDoc.webViewLink && (
-                  <a
-                    href={previewDoc.webViewLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    🔗 Mở trong Drive
-                  </a>
-                )}
-                <button
-                  onClick={closePreview}
-                  className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-2xl px-2"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-            {/* Body */}
-            <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-900">
-              {previewUrl ? (
-                <iframe
-                  src={previewUrl}
-                  className="w-full h-full min-h-[75vh] border-0"
-                  title={previewDoc.name}
-                  allow="autoplay"
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full min-h-[40vh] text-gray-500 dark:text-slate-400">
-                  <div className="text-center">
-                    <p className="text-lg mb-2">Không thể xem trước file này</p>
-                    {previewDoc.webViewLink && (
-                      <a href={previewDoc.webViewLink} target="_blank" rel="noopener noreferrer"
-                        className="text-primary-600 dark:text-primary-400 hover:underline">
-                        Mở trong Google Drive →
-                      </a>
-                    )}
-                  </div>
-                </div>
+                  🔗 Mở trong Drive
+                </a>
               )}
+              <button
+                onClick={closePreview}
+                className="text-gray-400 hover:text-white text-2xl px-2"
+              >
+                ✕
+              </button>
             </div>
+          </div>
+          {/* Body - Fullscreen */}
+          <div className="flex-1 overflow-hidden bg-black">
+            {previewUrl ? (
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-0"
+                title={previewDoc.name}
+                allow="autoplay"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <div className="text-center">
+                  <p className="text-lg mb-2">Không thể xem trước file này</p>
+                  {previewDoc.webViewLink && (
+                    <a href={previewDoc.webViewLink} target="_blank" rel="noopener noreferrer"
+                      className="text-primary-600 hover:underline">
+                      Mở trong Google Drive →
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
