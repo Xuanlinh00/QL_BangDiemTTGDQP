@@ -198,10 +198,10 @@ def _is_data_row(cols: List[str]) -> bool:
     # - Prefix: DA210001, DT20A (2-3 chữ + 5-8 chữ số)
     # - Cũ: 07.606.01691 (format có dấu chấm)
     mssv_patterns = [
-        r"^1[01]\d{7,8}$",           # 110122001, 112522006
-        r"^[A-Z]{1,3}\d{5,10}$",     # DA210001, DT20A
-        r"^\d{2}\.\d{3}\.\d{5}$",    # 07.606.01691
-        r"^\d{7,12}$",               # 1234567 - 123456789012
+        r"^1[01]\d{7,8}$",           # 110122001, 112522006 (mới)
+        r"^[A-Z]{1,3}\d{5,10}$",     # DA210001, DT20A (prefix)
+        r"^\d{2}\.\d{3}\.\d{5}$",    # 07.606.01691 (cũ có dấu chấm)
+        r"^\d{7,12}$",               # 1234567 - 123456789012 (generic)
     ]
     
     for pattern in mssv_patterns:
@@ -302,7 +302,7 @@ class ColumnLayout:
 def _split_row(line: str) -> List[str]:
     """
     Phân tách hàng: ưu tiên tab, fallback khoảng trắng >= 2.
-    CẢI THIỆN: Xử lý tốt hơn các format khác nhau.
+    ✅ CẢI THIỆN: Xử lý tốt hơn các format khác nhau, tránh tách tên có khoảng trắng.
     """
     if not line:
         return []
@@ -311,20 +311,16 @@ def _split_row(line: str) -> List[str]:
     if "\t" in line:
         cols = line.split("\t")
     else:
-        # Khoảng trắng >= 2 → phân tách cột
+        # Khoảng trắng >= 2 → phân tách cột (column marker)
         # Nhưng giữ lại khoảng trắng đơn trong tên
         cols = re.split(r"  +", line)
     
-    # Loại bỏ cột rỗng đầu/cuối, nhưng giữ cột rỗng ở giữa
+    # Strip từng cột nhưng giữ cấu trúc
     result = []
     for col in cols:
-        result.append(col.strip())
-    
-    # Loại bỏ cột rỗng ở đầu và cuối
-    while result and not result[0]:
-        result.pop(0)
-    while result and not result[-1]:
-        result.pop()
+        stripped = col.strip()
+        if stripped:  # Chỉ thêm cột không rỗng
+            result.append(stripped)
     
     return result
 

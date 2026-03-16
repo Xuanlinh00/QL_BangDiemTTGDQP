@@ -313,7 +313,7 @@ export default function Decisions() {
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-0 max-w-full overflow-hidden -mt-2">
       {/* ═══════════════════ LEFT PANEL: File Explorer ═══════════════════ */}
-      <div className={`flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm transition-all duration-300 ${selectedFile ? 'w-1/2 xl:w-[55%]' : 'w-full'}`}>
+      <div className={`flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm transition-all duration-300 ${selectedFile ? 'hidden' : 'w-full'}`}>
         {/* Explorer Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -506,47 +506,47 @@ export default function Decisions() {
 
       {/* ═══════════════════ RIGHT PANEL: File Preview ═══════════════════ */}
       {selectedFile && (
-        <div className="w-1/2 xl:w-[45%] flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm ml-4 overflow-hidden animate-slide-in-left">
+        <div className="w-full flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm ml-0 overflow-hidden animate-slide-in-left">
           {/* Preview header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <PdfIcon className="w-8 h-8 shrink-0" />
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700 shrink-0 bg-gray-50 dark:bg-slate-800/50">
+            <div className="flex items-center gap-4 min-w-0">
+              <PdfIcon className="w-10 h-10 shrink-0" />
               <div className="min-w-0">
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">{selectedFile.fileName}</h3>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">{selectedFile.fileName}</h3>
+                <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
                   {selectedFile.number ? `QĐ ${selectedFile.number}` : ''}{selectedFile.number && selectedFile.uploadedAt ? ' • ' : ''}{selectedFile.uploadedAt ? `Tải lên: ${selectedFile.uploadedAt}` : ''}{selectedFile.fileSize ? ` • ${formatFileSize(selectedFile.fileSize)}` : ''}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {/* Full view */}
               <button
                 onClick={() => { setFullPreviewFile(selectedFile); setFullPreviewUrl(decisionsApi.getFileUrl(selectedFile._id)) }}
-                className="px-2.5 py-1.5 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-800/30 text-green-700 dark:text-green-400 text-xs font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-800/30 text-green-700 dark:text-green-400 text-sm font-medium rounded-lg transition-colors"
               >
                 Xem đầy đủ
               </button>
               {/* Edit */}
               <button
                 onClick={() => setShowEditFileModal(true)}
-                className="px-2.5 py-1.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800/30 text-blue-700 dark:text-blue-400 text-xs font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800/30 text-blue-700 dark:text-blue-400 text-sm font-medium rounded-lg transition-colors"
               >
                 Sửa
               </button>
               {/* Delete */}
               <button
                 onClick={() => handleDeleteFile(selectedFile)}
-                className="p-1.5 text-gray-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="p-2 text-gray-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 title="Xóa file"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
               </button>
               {/* Close */}
               <button
                 onClick={() => { setSelectedFile(null); setPreviewUrl(null) }}
-                className="p-1.5 text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
           </div>
@@ -610,29 +610,29 @@ export default function Decisions() {
       {/* Full Preview Modal (double click) */}
       {fullPreviewFile && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[95vh] flex flex-col border border-gray-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-[98vw] h-[98vh] flex flex-col border border-gray-200 dark:border-slate-700">
             {/* Header */}
-            <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <PdfIcon className="w-8 h-8 shrink-0" />
+            <div className="border-b border-gray-200 dark:border-slate-700 px-8 py-5 flex items-center justify-between shrink-0 bg-gray-50 dark:bg-slate-800/50">
+              <div className="flex items-center gap-4 min-w-0">
+                <PdfIcon className="w-10 h-10 shrink-0" />
                 <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-white truncate">{fullPreviewFile.fileName}</h3>
-                  <p className="text-xs text-gray-400 dark:text-slate-500">
+                  <h3 className="text-2xl font-bold text-gray-800 dark:text-white truncate">{fullPreviewFile.fileName}</h3>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
                     {fullPreviewFile.number ? `QĐ ${fullPreviewFile.number}` : ''}{fullPreviewFile.number && fullPreviewFile.uploadedAt ? ' • ' : ''}{fullPreviewFile.uploadedAt ? `Tải lên: ${fullPreviewFile.uploadedAt}` : ''}{fullPreviewFile.fileSize ? ` • ${formatFileSize(fullPreviewFile.fileSize)}` : ''}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 <a
                   href={decisionsApi.getFileUrl(fullPreviewFile._id)}
                   download={fullPreviewFile.fileName}
-                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-base font-medium rounded-lg transition-colors"
                 >
                   ⬇️ Tải xuống
                 </a>
                 <button
                   onClick={() => { setFullPreviewFile(null); setFullPreviewUrl(null) }}
-                  className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-2xl px-2"
+                  className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-3xl px-3"
                 >
                   ✕
                 </button>

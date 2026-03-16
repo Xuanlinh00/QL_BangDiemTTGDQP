@@ -155,6 +155,7 @@ export interface IDocument extends MongoDocument {
   className?: string
   trainingProgram?: string
   fileData?: Buffer
+  gridfsFileId?: mongoose.Types.ObjectId
 }
 
 const DocumentSchema = new Schema<IDocument>({
@@ -174,6 +175,7 @@ const DocumentSchema = new Schema<IDocument>({
   className: { type: String },
   trainingProgram: { type: String },
   fileData: { type: Buffer },
+  gridfsFileId: { type: Schema.Types.ObjectId },
 }, { timestamps: true })
 
 export const DocumentModel = mongoose.model<IDocument>('Document', DocumentSchema)

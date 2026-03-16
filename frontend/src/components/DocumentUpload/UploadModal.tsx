@@ -19,6 +19,62 @@ const yearOptions = Array.from({ length: currentYear - 2014 + 2 }, (_, i) => cur
 
 const DEFAULT_PROGRAMS = ['Đại học', 'Cao đẳng', 'Liên thông', 'Nghề']
 
+// ═══════════════════════════════════════════════════════
+// Auto-parse filename to extract metadata
+// ═══════════════════════════════════════════════════════
+interface ParsedMetadata {
+  trainingProgram?: string
+  cohort?: string
+  academicYear?: string
+  className?: string
+}
+
+function parseFilenameMetadata(filename: string): ParsedMetadata {
+  const result: ParsedMetadata = {}
+  
+  // Remove extension
+  const nameWithoutExt = filename.replace(/\.[^/.]+$/, '')
+  
+  // Pattern: DA22, CA22, DF22, DE22, VB22, etc.
+  // DA/CA/DF/DE/VB = prefix (2 letters)
+  // 22 = cohort/year (2 digits)
+  const prefixMatch = nameWithoutExt.match(/^([A-Z]{2})(\d{2})/i)
+  
+  if (prefixMatch) {
+    const prefix = prefixMatch[1].toUpperCase()
+    const yearNum = parseInt(prefixMatch[2], 10)
+    
+    // Determine training program based on prefix
+    if (prefix === 'DA') {
+      result.trainingProgram = 'Đại học'
+    } else if (prefix === 'CA') {
+      result.trainingProgram = 'Cao đẳng'
+    } else if (['DF', 'DE', 'VB'].includes(prefix)) {
+      result.trainingProgram = 'Liên thông'
+    }
+    
+    // Set cohort (e.g., DA22 → cohort = "DA22")
+    result.cohort = `${prefix}${yearNum}`
+    
+    // Calculate academic year (e.g., 22 → 2022)
+    // Assume 00-30 = 2000-2030, 31-99 = 1931-1999
+    const fullYear = yearNum <= 30 ? 2000 + yearNum : 1900 + yearNum
+    result.academicYear = String(fullYear)
+    
+    // Try to extract class name from remaining text
+    // Pattern: DA22TYC, CA22CNTT, etc.
+    const classMatch = nameWithoutExt.match(/^[A-Z]{2}\d{2}([A-Z0-9]+)/i)
+    if (classMatch && classMatch[1]) {
+      result.className = `${prefix}${yearNum}${classMatch[1]}`
+    } else {
+      // Fallback: use prefix + year as class name
+      result.className = `${prefix}${yearNum}`
+    }
+  }
+  
+  return result
+}
+
 export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalProps) {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
@@ -70,6 +126,25 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
       }
       return true
     })
+    
+    // Auto-parse metadata from first file if fields are empty
+    if (validFiles.length > 0 && !academicYear && !trainingProgram) {
+      const parsed = parseFilenameMetadata(validFiles[0].name)
+      
+      if (parsed.trainingProgram) {
+        setTrainingProgram(parsed.trainingProgram)
+      }
+      if (parsed.cohort) {
+        setCohort(parsed.cohort)
+      }
+      if (parsed.academicYear) {
+        setAcademicYear(parsed.academicYear)
+      }
+      if (parsed.className) {
+        setClassName(parsed.className)
+      }
+    }
+    
     setUploadedFiles([...uploadedFiles, ...validFiles])
   }
 
@@ -83,31 +158,24 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
       return
     }
     
-    if (!academicYear) {
-      toast.error('Vui lòng chọn năm học')
-      return
-    }
-    if (!cohort) {
-      toast.error('Vui lòng nhập khóa')
-      return
-    }
-    if (!className) {
-      toast.error('Vui lòng nhập lớp')
-      return
-    }
-    if (!trainingProgram) {
-      toast.error('Vui lòng chọn chương trình đào tạo')
-      return
-    }
+    // Process each file individually based on its filename
+    const filesWithMetadata = uploadedFiles.map(file => {
+      const parsed = parseFilenameMetadata(file.name)
+      return {
+        file,
+        metadata: {
+          academicYear: parsed.academicYear || academicYear || undefined,
+          cohort: parsed.cohort || cohort || undefined,
+          className: parsed.className || className || undefined,
+          trainingProgram: parsed.trainingProgram || trainingProgram || undefined,
+        }
+      }
+    })
     
-    const metadata: DocumentMetadata = {
-      academicYear,
-      cohort,
-      className,
-      trainingProgram,
-    }
-    
-    onUpload(uploadedFiles, 'DSGD', metadata)
+    // Call onUpload for each file with its own metadata
+    filesWithMetadata.forEach(({ file, metadata }) => {
+      onUpload([file], 'DSGD', metadata)
+    })
     
     // Reset form
     setUploadedFiles([])
@@ -147,7 +215,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
             {/* Academic Year */}
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Năm học <span className="text-red-500">*</span>
+                Năm học
               </label>
               <div className="flex gap-2">
                 <select
@@ -208,7 +276,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
             {/* Training Program */}
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Chương trình đào tạo <span className="text-red-500">*</span>
+                Chương trình đào tạo
               </label>
               <div className="flex gap-2">
                 <select
@@ -268,7 +336,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
               {/* Cohort */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Khóa <span className="text-red-500">*</span>
+                  Khóa
                 </label>
                 <input
                   type="text"
@@ -282,7 +350,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
               {/* Class Name */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Lớp <span className="text-red-500">*</span>
+                  Lớp
                 </label>
                 <input
                   type="text"
@@ -295,7 +363,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
             </div>
 
             <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
-              <span className="text-red-500">*</span> Trường bắt buộc — File sẽ được sắp xếp theo CTĐT → Năm → Khóa → Lớp
+              Thông tin sẽ được tự động phân loại từ tên file (VD: DA22TYC.pdf). Bạn có thể chỉnh sửa nếu cần.
             </p>
           </div>
 

@@ -658,18 +658,74 @@ export default function Documents() {
               Tất cả
             </button>
             {yearFolders.map(year => (
-              <button
-                key={year}
-                onClick={() => setSelectedYear(year)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  selectedYear === year
-                    ? 'bg-amber-500 text-white shadow-sm'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                }`}
-              >
-                {year} ({countDocsForYear(year)})
-              </button>
+              <div key={year} className="flex items-center gap-1">
+                <button
+                  onClick={() => setSelectedYear(year)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    selectedYear === year
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  {year} ({countDocsForYear(year)})
+                </button>
+                <button
+                  onClick={async () => {
+                    const count = documents.filter(doc => {
+                      const docProg = doc.trainingProgram || ''
+                      const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
+                      return docProg === selectedProgram && docYear === year
+                    }).length
+                    if (!window.confirm(`Bạn có chắc chắn muốn xóa tất cả ${count} tài liệu của năm ${year}?`)) return
+                    try {
+                      const docsToDelete = documents.filter(doc => {
+                        const docProg = doc.trainingProgram || ''
+                        const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
+                        return docProg === selectedProgram && docYear === year
+                      })
+                      for (const doc of docsToDelete) {
+                        await docstoreApi.delete(doc._id)
+                      }
+                      setDocuments(prev => prev.filter(d => !docsToDelete.some(del => del._id === d._id)))
+                      setStudentRecords(prev => prev.filter(r => !docsToDelete.some(d => d._id === r.docId)))
+                      setSelectedYear(null)
+                      toast.success(`Đã xóa ${count} tài liệu của năm ${year}`)
+                    } catch (e) {
+                      console.error('Delete year failed:', e)
+                      toast.error('Xóa thất bại')
+                    }
+                  }}
+                  className="px-2 py-1 rounded-md text-xs font-medium bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+                  title={`Xóa tất cả tài liệu của năm ${year}`}
+                >
+                  🗑️
+                </button>
+              </div>
             ))}
+            <button
+              onClick={async () => {
+                const count = documents.filter(doc => (doc.trainingProgram || '') === selectedProgram).length
+                if (!window.confirm(`Bạn có chắc chắn muốn xóa tất cả ${count} tài liệu của chương trình "${selectedProgram}"?`)) return
+                try {
+                  const docsToDelete = documents.filter(doc => (doc.trainingProgram || '') === selectedProgram)
+                  for (const doc of docsToDelete) {
+                    await docstoreApi.delete(doc._id)
+                  }
+                  setDocuments(prev => prev.filter(d => (d.trainingProgram || '') !== selectedProgram))
+                  setStudentRecords(prev => prev.filter(r => !docsToDelete.some(d => d._id === r.docId)))
+                  setSelectedProgram(null)
+                  setSelectedYear(null)
+                  toast.success(`Đã xóa ${count} tài liệu`)
+                } catch (e) {
+                  console.error('Delete all failed:', e)
+                  toast.error('Xóa thất bại')
+                }
+              }}
+              className="ml-auto px-3 py-1 rounded-md text-xs font-medium bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+              title="Xóa tất cả tài liệu của chương trình này"
+            >
+              🗑️ Xóa tất cả
+            </button>
           </div>
         )}
       </div>
@@ -790,22 +846,26 @@ export default function Documents() {
       </div>
 
       {/* Table + Side Preview */}
-      <div className="flex gap-4" style={{ minHeight: quickPreviewDoc ? '500px' : undefined }}>
+      <div className="flex gap-4 h-[calc(100vh-18rem)]">
       {/* Table */}
-      <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-auto transition-colors ${quickPreviewDoc ? 'w-1/3 xl:w-[45%]' : 'w-full'}`}>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">Tên file</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">Nguồn</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">Loại</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">OCR</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">Extract</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">Ngày</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col transition-colors ${quickPreviewDoc ? 'w-1/3 xl:w-[45%]' : 'w-full'}`}>
+        <div className="flex flex-col h-full overflow-hidden">
+          <table className="w-full text-base flex-shrink-0">
+            <thead className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700">
+              <tr>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Tên file</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Nguồn</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Loại</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">OCR</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Extract</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Ngày</th>
+                <th className="px-4 py-4 text-center text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Hành động</th>
+              </tr>
+            </thead>
+          </table>
+          <div className="flex-1 overflow-y-auto">
+            <table className="w-full text-base">
+              <tbody>
             {filteredDocuments.length === 0 ? (
               <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">Không có tài liệu nào</td></tr>
             ) : (
@@ -818,10 +878,10 @@ export default function Documents() {
                     onDoubleClick={() => handleRowDoubleClick(doc)}
                     className={`border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer ${quickPreviewDoc?._id === doc._id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <span>{doc.mimeType?.includes('pdf') ? '📄' : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel') ? '📊' : '📎'}</span>
-                        <span className="font-medium text-gray-800 dark:text-slate-200 truncate max-w-[200px]" title={doc.name}>
+                        <span className="text-lg">{doc.mimeType?.includes('pdf') ? '📄' : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel') ? '📊' : '📎'}</span>
+                        <span className="font-medium text-gray-800 dark:text-slate-200 truncate max-w-[200px] text-base" title={doc.name}>
                           {q
                             ? doc.name.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, i) =>
                                 part.toLowerCase() === q
@@ -833,32 +893,32 @@ export default function Documents() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sourceBadge.color}`}>
+                    <td className="px-4 py-4">
+                      <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${sourceBadge.color}`}>
                         {sourceBadge.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-xs font-medium">
+                    <td className="px-4 py-4">
+                      <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium">
                         {doc.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(doc.ocr_status)}`}>
+                    <td className="px-4 py-4">
+                      <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${getStatusColor(doc.ocr_status)}`}>
                         {doc.ocr_status}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(doc.extract_status)}`}>
+                    <td className="px-4 py-4">
+                      <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${getStatusColor(doc.extract_status)}`}>
                         {doc.extract_status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-slate-400">{doc.uploaded_at}</td>
-                    <td className="px-4 py-3" onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="px-4 py-4 text-sm text-gray-500 dark:text-slate-400">{doc.uploaded_at}</td>
+                    <td className="px-4 py-4" onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleOpenOCRReview(doc)}
-                          className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded font-medium transition-colors"
+                          className="px-3 py-2 text-sm bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded font-medium transition-colors"
                           title="OCR & Xem xét dữ liệu"
                         >
                           🔬 OCR
@@ -877,7 +937,7 @@ export default function Documents() {
                                 }, doc.name, doc.type as 'DSGD' | 'QD' | 'BieuMau')
                                 toast.success(`Đã xuất Excel: ${doc.name.replace(/\.pdf$/i, '')}.xlsx`)
                               }}
-                              className="px-2 py-1 text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded font-medium transition-colors"
+                              className="px-3 py-2 text-sm bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded font-medium transition-colors"
                               title={`Xuất Excel (${docRecs.length} bản ghi)`}
                             >
                               📥 Excel
@@ -886,14 +946,14 @@ export default function Documents() {
                         })()}
                         <button
                           onClick={() => handleViewFile(doc)}
-                          className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium transition-colors"
+                          className="px-3 py-2 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium transition-colors"
                           title="Xem file"
                         >
                           👁️ Xem
                         </button>
                         <button
                           onClick={() => handleDownloadFile(doc)}
-                          className="px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 rounded font-medium transition-colors"
+                          className="px-3 py-2 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded font-medium transition-colors"
                           title="Tải file"
                         >
                           ⬇️ Tải
@@ -903,7 +963,7 @@ export default function Documents() {
                             href={doc.webViewLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2 py-1 text-xs bg-primary-100 hover:bg-primary-200 text-primary-700 rounded font-medium transition-colors"
+                            className="px-3 py-2 text-sm bg-primary-100 hover:bg-primary-200 text-primary-700 rounded font-medium transition-colors"
                             title="Mở trong Drive"
                           >
                             🔗
@@ -911,14 +971,14 @@ export default function Documents() {
                         )}
                         <button
                           onClick={() => setEditDoc(doc)}
-                          className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium transition-colors"
+                          className="px-3 py-2 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium transition-colors"
                           title="Sửa"
                         >
                           ✏️ Sửa
                         </button>
                         <button
                           onClick={() => handleDeleteDoc(doc._id)}
-                          className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded font-medium transition-colors"
+                          className="px-3 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded font-medium transition-colors"
                           title="Xóa"
                         >
                           🗑️
@@ -929,8 +989,10 @@ export default function Documents() {
                 )
               })
             )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Side Preview Panel (single click) */}
@@ -1028,12 +1090,12 @@ export default function Documents() {
         />
       )}
 
-      {/* ── File Preview Modal (Fullscreen) ── */}
+      {/* ── File Preview Modal (Full Width) ── */}
       {previewDoc && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <div className="fixed inset-0 bg-white dark:bg-slate-900 z-50 flex flex-col">
           {/* Header */}
-          <div className="border-b border-gray-700 px-6 py-3 flex items-center justify-between shrink-0 bg-gray-900">
-            <h3 className="text-lg font-bold text-white truncate pr-4">
+          <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between shrink-0 bg-gray-50 dark:bg-slate-800">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white truncate pr-4">
               {previewDoc.mimeType?.includes('pdf') ? '📄' : '📊'} {previewDoc.name}
             </h3>
             <div className="flex items-center gap-2 shrink-0">
@@ -1055,14 +1117,14 @@ export default function Documents() {
               )}
               <button
                 onClick={closePreview}
-                className="text-gray-400 hover:text-white text-2xl px-2"
+                className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-2xl px-2"
               >
                 ✕
               </button>
             </div>
           </div>
-          {/* Body - Fullscreen */}
-          <div className="flex-1 overflow-hidden bg-black">
+          {/* Body - Full Width PDF */}
+          <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-950">
             {previewUrl ? (
               <iframe
                 src={previewUrl}
@@ -1076,7 +1138,7 @@ export default function Documents() {
                   <p className="text-lg mb-2">Không thể xem trước file này</p>
                   {previewDoc.webViewLink && (
                     <a href={previewDoc.webViewLink} target="_blank" rel="noopener noreferrer"
-                      className="text-primary-600 hover:underline">
+                      className="text-primary-600 dark:text-primary-400 hover:underline">
                       Mở trong Google Drive →
                     </a>
                   )}

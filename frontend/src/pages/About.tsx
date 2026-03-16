@@ -111,48 +111,6 @@ export default function About() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto -mt-2">
-      {/* ═══ INTRO CARD ═══ */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in-up">
-        <div className="bg-gradient-to-r from-red-700 via-red-600 to-yellow-500 p-6 lg:p-8 text-white">
-          <div className="flex items-start gap-4">
-            <div className="shrink-0 w-16 h-16 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
-              <span className="text-3xl">🏛️</span>
-            </div>
-            <div>
-              <h3 className="text-lg lg:text-xl font-extrabold tracking-tight">
-                TRUNG TÂM GIÁO DỤC QUỐC PHÒNG VÀ AN NINH
-              </h3>
-              <p className="text-white/80 text-sm mt-1">Trường Đại học Trà Vinh &bull; TVU</p>
-              <p className="text-white/70 text-xs mt-0.5">....</p>
-            </div>
-          </div>
-        </div>
-        <div className="p-6 lg:p-8 space-y-4 text-sm text-gray-700 dark:text-slate-300 leading-relaxed">
-          <p>
-            Trung tâm Giáo dục Quốc phòng và An ninh thuộc Trường Đại học Trà Vinh thực hiện nhiệm vụ đào tạo, bồi dưỡng chương trình Giáo dục Quốc phòng và An ninh cho sinh viên Trường Đại học Trà Vinh; tổ chức các hoạt động giáo dục quốc phòng cho các đơn vị có nhu cầu, các cơ sở đào tạo khác theo đúng quy định của nhà nước; cấp chứng chỉ Giáo dục Quốc phòng và An ninh cho sinh viên sau khi hoàn thành chương trình học tập.
-          </p>
-          <p>
-            Giáo dục quốc phòng và an ninh là bộ phận của nền giáo dục quốc dân, một nội dung cơ bản trong xây dựng nền quốc phòng toàn dân, an ninh nhân dân; là môn học chính khóa trong chương trình giáo dục và đào tạo trong trung học phổ thông đến đại học và các trường chính trị, hành chính, đoàn thể.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div className="flex items-start gap-3">
-              <span className="text-lg">📞</span>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Điện thoại liên lạc</p>
-                <p className="font-medium text-gray-800 dark:text-slate-200">(((((</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="text-lg">📍</span>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase">Cơ sở đào tạo</p>
-                <p className="font-medium text-gray-800 dark:text-slate-200">Số 126, Nguyễn Thiện Thành, Khóm 4, Phường 5, TP. Trà Vinh, Trà Vinh</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ═══ ACTIVITIES / POSTS SECTION ═══ */}
       <div>
         <div className="flex items-center justify-between mb-5">

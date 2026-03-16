@@ -13,23 +13,12 @@ interface Metrics {
   alerts: string[]
 }
 
-/* ══════════════════════════════════════════════════════════════
-   SVG ICONS (Các icon cơ bản để file biên dịch không bị lỗi)
-   ══════════════════════════════════════════════════════════════ */
-const UploadIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-const ScoreIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-const DecisionIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+const DocumentsIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+const DecisionsIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+const PagesIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
 const OcrIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-const UniversityIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-const CollegeIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /></svg>
-const BridgeIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" /></svg>
-const ExcelIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-const DriveIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
-const FormIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-const HelpIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-const ChartIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /></svg>
+const AlertIcon = ({ className }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4v2m0 4v2M7.08 6.47a9 9 0 1 1 9.84 0" /></svg>
 
-/* ── Animated Counter Hook ── */
 function useAnimatedCount(target: number, duration = 1200) {
   const [count, setCount] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
@@ -44,7 +33,7 @@ function useAnimatedCount(target: number, duration = 1200) {
           const start = performance.now()
           const animate = (now: number) => {
             const elapsed = now - start
-            const progress = Math.min(elapsed / duration, 1) // Lỗi đứt đoạn nằm ở đây đã được nối lại
+            const progress = Math.min(elapsed / duration, 1)
             const eased = 1 - Math.pow(1 - progress, 3)
             setCount(Math.round(eased * target))
             if (progress < 1) requestAnimationFrame(animate)
@@ -61,7 +50,6 @@ function useAnimatedCount(target: number, duration = 1200) {
   return { count, ref }
 }
 
-/* ── Animated Stat Card ── */
 function StatCard({ label, value, suffix, icon, color, delay }: {
   label: string; value: number; suffix?: string; icon: React.ReactNode; color: string; delay: number
 }) {
@@ -69,361 +57,197 @@ function StatCard({ label, value, suffix, icon, color, delay }: {
   return (
     <div
       ref={ref}
-      className={`group relative bg-white dark:bg-slate-800 rounded-2xl p-6 border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1 overflow-hidden animate-fade-in-up`}
+      className={`bg-white dark:bg-slate-800 rounded-lg p-6 border border-gray-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-300`}
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-[4rem] ${color} opacity-10 group-hover:opacity-20 transition-opacity duration-500`} />
-      <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl ${color} text-white mb-3 shadow-lg`}>
-        {icon}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-600 dark:text-slate-400 font-medium">{label}</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+            {count.toLocaleString()}{suffix}
+          </p>
+        </div>
+        <div className={`${color} p-3 rounded-lg text-white`}>
+          {icon}
+        </div>
       </div>
-      <p className="text-3xl font-extrabold text-gray-900 dark:text-white">
-        {count.toLocaleString()}{suffix}
-      </p>
-      <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">{label}</p>
     </div>
   )
 }
 
-/* ── Hero Slide Data ── */
-const heroSlides = [
-  {
-    title: 'HỆ THỐNG QUẢN LÝ HỒ SƠ GDQP-AN',
-    subtitle: 'Trung tâm Giáo dục Quốc phòng - An ninh',
-    desc: 'Số hóa toàn diện quy trình quản lý bảng điểm, quyết định và hồ sơ giáo dục quốc phòng với công nghệ OCR tiên tiến',
-    gradient: 'from-primary-700 via-primary-600 to-blue-500',
-  },
-  {
-    title: 'CÔNG NGHỆ OCR THÔNG MINH',
-    subtitle: 'Nhận dạng & Trích xuất tự động',
-    desc: 'Tự động nhận dạng văn bản từ bảng điểm scan, hỗ trợ xử lý hàng loạt với độ chính xác cao',
-    gradient: 'from-blue-700 via-indigo-600 to-purple-500',
-  },
-  {
-    title: 'ĐẠI HỌC TRÀ VINH',
-    subtitle: '20 Năm Đồng Hành Kiến Tạo Tương Lai',
-    desc: 'Mang đến cơ hội học tập chất lượng cho cộng đồng - Devotion, Transparency, Friendliness, Innovation',
-    gradient: 'from-accent-700 via-emerald-600 to-teal-500',
-  },
-]
-
-/* ── Quick Service Links ── */
-const serviceLinks = [
-  { label: 'Tải lên tài liệu', desc: 'Upload PDF / ảnh scan bảng điểm', icon: UploadIcon, path: '/documents', color: 'bg-primary-500', hoverColor: 'hover:bg-primary-600' },
-  { label: 'Bảng điểm GDQP', desc: 'Tra cứu & quản lý điểm sinh viên', icon: ScoreIcon, path: '/documents?type=DSGD', color: 'bg-accent-500', hoverColor: 'hover:bg-accent-600' },
-  { label: 'Quyết định', desc: 'Quản lý quyết định GDQP-AN', icon: DecisionIcon, path: '/decisions', color: 'bg-blue-500', hoverColor: 'hover:bg-blue-600' },
-  { label: 'OCR Xử lý', desc: 'Nhận dạng chữ từ tài liệu scan', icon: OcrIcon, path: '/documents', color: 'bg-indigo-500', hoverColor: 'hover:bg-indigo-600' },
-  { label: 'Đại học', desc: 'Hồ sơ hệ Đại học chính quy', icon: UniversityIcon, path: '/documents?system=DH', color: 'bg-purple-500', hoverColor: 'hover:bg-purple-600' },
-  { label: 'Cao đẳng', desc: 'Hồ sơ hệ Cao đẳng', icon: CollegeIcon, path: '/documents?system=CD', color: 'bg-pink-500', hoverColor: 'hover:bg-pink-600' },
-  { label: 'Liên thông', desc: 'Hồ sơ hệ Liên thông', icon: BridgeIcon, path: '/documents?system=LT', color: 'bg-orange-500', hoverColor: 'hover:bg-orange-600' },
-  { label: 'Xuất Excel', desc: 'Xuất dữ liệu & báo cáo tổng hợp', icon: ExcelIcon, path: '/documents', color: 'bg-emerald-500', hoverColor: 'hover:bg-emerald-600' },
-  { label: 'Google Drive', desc: 'Kết nối & nhập từ Drive', icon: DriveIcon, path: '/documents', color: 'bg-yellow-500', hoverColor: 'hover:bg-yellow-600' },
-  { label: 'Biểu mẫu', desc: 'Các biểu mẫu GDQP-AN', icon: FormIcon, path: '/documents?type=BieuMau', color: 'bg-teal-500', hoverColor: 'hover:bg-teal-600' },
-  { label: 'Hỗ trợ', desc: 'Hướng dẫn sử dụng hệ thống', icon: HelpIcon, path: '/', color: 'bg-rose-500', hoverColor: 'hover:bg-rose-600' },
-]
-
-/* ── Recent Activities ── */
-const recentActivities = [
-  { action: 'Tải lên bảng điểm', detail: 'GDQP K47 - Đại học - HK1 2025-2026', time: '5 phút trước', type: 'upload' },
-  { action: 'OCR hoàn tất', detail: 'Bảng điểm lớp DH47A - 45 sinh viên', time: '12 phút trước', type: 'ocr' },
-  { action: 'Tạo quyết định', detail: 'QĐ số 1234/QĐ-TTGDQP', time: '1 giờ trước', type: 'decision' },
-  { action: 'Đối soát dữ liệu', detail: 'K46 - Cao đẳng - 128 sinh viên', time: '3 giờ trước', type: 'reconcile' },
-]
-
 export default function Dashboard() {
-  const { user } = useAuth()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
-  const [currentSlide, setCurrentSlide] = useState(0)
-  const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('left')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/dashboard/metrics')
-      .then(res => { if (res.data?.data) setMetrics(res.data.data) })
-      .catch(() => {})
+    async function loadMetrics() {
+      try {
+        const res = await api.get('/api/metrics')
+        setMetrics(res.data.data)
+      } catch (e) {
+        console.error('Failed to load metrics:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadMetrics()
   }, [])
 
-  // Auto-rotate hero slides
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSlideDirection('left')
-      setCurrentSlide(prev => (prev + 1) % heroSlides.length)
-    }, 6000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const goToSlide = (index: number) => {
-    setSlideDirection(index > currentSlide ? 'left' : 'right')
-    setCurrentSlide(index)
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-slate-400">Đang tải dữ liệu...</p>
+        </div>
+      </div>
+    )
   }
 
-  const slide = heroSlides[currentSlide]
-
   return (
-    <div className="space-y-8 max-w-7xl mx-auto -mt-2">
-
-      {/* ═══════════ 1. HERO BANNER / SLIDER ═══════════ */}
-      <div className={`relative bg-gradient-to-r ${slide.gradient} rounded-3xl overflow-hidden shadow-2xl min-h-[280px] lg:min-h-[340px] transition-all duration-700`}>
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-10 -right-10 w-72 h-72 bg-white/5 rounded-full animate-float-slow" />
-          <div className="absolute bottom-0 left-10 w-48 h-48 bg-white/5 rounded-full animate-float-delayed" />
-          <div className="absolute top-1/2 right-1/4 w-32 h-32 bg-white/5 rounded-full animate-pulse-slow" />
-          <div className="absolute inset-0 opacity-5" style={{
-            backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
-            backgroundSize: '30px 30px',
-          }} />
-          <div className="absolute -right-20 top-0 w-80 h-full bg-white/5 transform skew-x-[-12deg]" />
-        </div>
-
-        <div className="relative z-10 p-8 lg:p-12 flex flex-col justify-center min-h-[280px] lg:min-h-[340px]">
-          <div key={currentSlide} className={`animate-slide-in-${slideDirection}`}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md rounded-full px-4 py-1.5 border border-white/20">
-                <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-primary-700 font-extrabold text-[10px] shadow">TVU</div>
-                <span className="text-white/90 text-xs font-medium">Đại học Trà Vinh</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md rounded-full px-4 py-1.5 border border-white/20">
-                <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-accent-700 font-extrabold text-[10px] shadow">QP</div>
-                <span className="text-white/90 text-xs font-medium">GDQP-AN</span>
-              </div>
-            </div>
-
-            <h1 className="text-2xl lg:text-4xl font-extrabold text-white tracking-tight leading-tight max-w-2xl">
-              {slide.title}
-            </h1>
-            <p className="text-lg lg:text-xl text-white/80 font-medium mt-2">
-              {slide.subtitle}
-            </p>
-            <div className="mt-3 flex flex-col items-start w-full max-w-2xl">
-              <div className="w-full mb-2 p-4 bg-white/20 rounded-2xl shadow-lg flex items-center justify-center" style={{ minHeight: '120px', minWidth: '320px' }}>
-                {/* Image preview placeholder, replace with actual image if available */}
-                <img src="/public/sample-upload-preview.png" alt="Preview" className="rounded-xl shadow-md object-cover" style={{ width: '100%', maxHeight: '180px', minHeight: '120px' }} />
-              </div>
-              <div className="w-full px-2">
-                <span className="block text-lg font-semibold text-white/90 mb-1">Hướng dẫn tải lên hình ảnh/bảng điểm</span>
-                <p className="text-base text-white/80 leading-relaxed" style={{ wordBreak: 'break-word' }}>
-                  {slide.desc}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3 mt-6">
-              <button
-                onClick={() => navigate('/documents')}
-                className="flex items-center gap-2 bg-white text-primary-700 font-bold rounded-xl px-6 py-3 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] text-sm"
-              >
-                <UploadIcon className="w-4 h-4" />
-                Bắt đầu sử dụng
-              </button>
-              <button
-                onClick={() => navigate('/documents?type=DSGD')}
-                className="flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/30 text-white rounded-xl px-6 py-3 transition-all hover:scale-[1.02] active:scale-[0.98] text-sm font-medium"
-              >
-                <ScoreIcon className="w-4 h-4" />
-                Tra cứu bảng điểm
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 mt-8">
-            {heroSlides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => goToSlide(i)}
-                className={`h-2 rounded-full transition-all duration-500 ${
-                  i === currentSlide ? 'w-10 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={() => { setSlideDirection('right'); setCurrentSlide(prev => (prev - 1 + heroSlides.length) % heroSlides.length) }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all border border-white/20"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-        </button>
-        <button
-          onClick={() => { setSlideDirection('left'); setCurrentSlide(prev => (prev + 1) % heroSlides.length) }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all border border-white/20"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-        </button>
-      </div>
-
-      {/* ═══════════ 2. WELCOME RIBBON ═══════════ */}
-      <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-2xl px-6 py-4 border border-gray-100 dark:border-slate-700 shadow-sm animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-600 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-lg">
-            {user?.name?.charAt(0) || 'C'}
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-              Xin chào, {user?.name || 'Cán bộ'}!
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400">
-              Chúc đồng chí một ngày làm việc hiệu quả
-            </p>
-          </div>
-        </div>
-        <div className="hidden md:flex items-center gap-2 text-sm text-gray-400 dark:text-slate-500">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bảng điều khiển</h1>
+          <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Xin chào, {user?.name || 'Quản lý'}</p>
         </div>
       </div>
 
-      {/* ═══════════ 3. QUICK SERVICES GRID (TVU-style) ═══════════ */}
-      <div>
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-1.5 h-8 bg-gradient-to-b from-primary-500 to-accent-500 rounded-full" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Dịch vụ nhanh</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {serviceLinks.map((item, i) => (
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Tổng tài liệu"
+          value={metrics?.total_documents || 0}
+          icon={<DocumentsIcon className="w-6 h-6" />}
+          color="bg-primary-500"
+          delay={0}
+        />
+        <StatCard
+          label="Tổng trang"
+          value={metrics?.total_pages || 0}
+          icon={<PagesIcon className="w-6 h-6" />}
+          color="bg-accent-500"
+          delay={100}
+        />
+        <StatCard
+          label="OCR hoàn tất"
+          value={metrics?.ocr_completed_percent || 0}
+          suffix="%"
+          icon={<OcrIcon className="w-6 h-6" />}
+          color="bg-success-500"
+          delay={200}
+        />
+        <StatCard
+          label="Quyết định"
+          value={metrics?.decisions_count || 0}
+          icon={<DecisionsIcon className="w-6 h-6" />}
+          color="bg-warning-500"
+          delay={300}
+        />
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Quick Actions */}
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Thao tác nhanh</h2>
+          <div className="grid grid-cols-2 gap-3">
             <button
-              key={item.label}
-              onClick={() => navigate(item.path)}
-              className={`group relative flex items-start gap-4 bg-white dark:bg-slate-800 rounded-2xl p-5 border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 text-left animate-fade-in-up overflow-hidden`}
-              style={{ animationDelay: `${150 + i * 50}ms` }}
+              onClick={() => navigate('/documents')}
+              className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left"
             >
-              <div className={`absolute inset-0 ${item.color} opacity-0 group-hover:opacity-[0.04] transition-opacity duration-300 rounded-2xl`} />
-              <div className={`flex-shrink-0 w-11 h-11 ${item.color} rounded-xl flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                <item.icon className="w-5 h-5" />
+              <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center text-primary-600 dark:text-primary-400">
+                <DocumentsIcon className="w-5 h-5" />
               </div>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
-                  {item.label}
-                </p>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 line-clamp-2">
-                  {item.desc}
-                </p>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Tài liệu</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Quản lý tài liệu</p>
               </div>
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ═══════════ 4. STATS SECTION ═══════════ */}
-      <div>
-        <div className="flex items-center gap-3 mb-5">
-          {/* Lỗi ở đây đã được đóng thẻ đầy đủ */}
-        </div>
-      </div>
-
-      {/* ═══════════ 5. BOTTOM SECTION: Activity + Alerts + Quick Info ═══════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: '600ms' }}>
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
-            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <svg className="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              Hoạt động gần đây
-            </h3>
-            <button className="text-xs text-primary-500 hover:text-primary-600 font-medium">Xem tất cả</button>
-          </div>
-          <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
-            {recentActivities.map((activity, i) => (
-              <div key={i} className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50/50 dark:hover:bg-slate-750 transition-colors">
-                <div className={`flex-shrink-0 mt-0.5 w-9 h-9 rounded-xl flex items-center justify-center text-white shadow ${
-                  activity.type === 'upload' ? 'bg-primary-500' :
-                  activity.type === 'ocr' ? 'bg-accent-500' :
-                  activity.type === 'decision' ? 'bg-blue-500' :
-                  activity.type === 'export' ? 'bg-emerald-500' :
-                  'bg-purple-500'
-                }`}>
-                  {activity.type === 'upload' && <UploadIcon className="w-4 h-4" />}
-                  {activity.type === 'ocr' && <OcrIcon className="w-4 h-4" />}
-                  {activity.type === 'decision' && <DecisionIcon className="w-4 h-4" />}
-                  {activity.type === 'export' && <ExcelIcon className="w-4 h-4" />}
-                  {activity.type === 'reconcile' && <ChartIcon className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 dark:text-slate-200">{activity.action}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">{activity.detail}</p>
-                </div>
-                <span className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap flex-shrink-0">{activity.time}</span>
+            <button
+              onClick={() => navigate('/decisions')}
+              className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left"
+            >
+              <div className="w-10 h-10 bg-accent-100 dark:bg-accent-900/30 rounded-lg flex items-center justify-center text-accent-600 dark:text-accent-400">
+                <DecisionsIcon className="w-5 h-5" />
               </div>
-            ))}
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Quyết định</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Quản lý quyết định</p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/data')}
+              className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left"
+            >
+              <div className="w-10 h-10 bg-success-100 dark:bg-success-900/30 rounded-lg flex items-center justify-center text-success-600 dark:text-success-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Dữ liệu</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Sinh viên & Điểm</p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left"
+            >
+              <div className="w-10 h-10 bg-warning-100 dark:bg-warning-900/30 rounded-lg flex items-center justify-center text-warning-600 dark:text-warning-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Cài đặt</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">Cấu hình hệ thống</p>
+              </div>
+            </button>
           </div>
         </div>
 
-        <div className="space-y-6">
-          {metrics && metrics.alerts.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-5 animate-fade-in-up" style={{ animationDelay: '700ms' }}>
-              <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-                Cảnh báo hệ thống
-              </h3>
-              <ul className="space-y-2">
+        {/* Status Overview */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Trạng thái</h2>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-slate-400">Đang xử lý</span>
+              <span className="text-lg font-bold text-warning-600 dark:text-warning-400">{metrics?.documents_pending || 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-slate-400">Lỗi</span>
+              <span className="text-lg font-bold text-danger-600 dark:text-danger-400">{metrics?.documents_error || 0}</span>
+            </div>
+            <div className="pt-3 border-t border-gray-200 dark:border-slate-700">
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Tiến độ OCR</p>
+              <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+                <div
+                  className="bg-success-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${metrics?.ocr_completed_percent || 0}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">{metrics?.ocr_completed_percent || 0}% hoàn tất</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {metrics?.alerts && metrics.alerts.length > 0 && (
+        <div className="bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertIcon className="w-5 h-5 text-warning-600 dark:text-warning-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-warning-900 dark:text-warning-200">Cảnh báo</h3>
+              <ul className="mt-2 space-y-1">
                 {metrics.alerts.map((alert, i) => (
-                  <li key={i} className="text-sm text-amber-700 dark:text-amber-400 flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 flex-shrink-0" />
-                    {alert}
-                  </li>
+                  <li key={i} className="text-sm text-warning-800 dark:text-warning-300">{alert}</li>
                 ))}
               </ul>
             </div>
-          )}
-
-          <div className="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 text-white shadow-lg animate-fade-in-up" style={{ animationDelay: '800ms' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              </div>
-              <h3 className="font-bold">Thông tin hệ thống</h3>
-            </div>
-            <ul className="space-y-3 text-sm">
-              <li className="flex items-center justify-between">
-                <span className="text-primary-200">Phiên bản</span>
-                <span className="font-semibold bg-white/15 rounded-lg px-2.5 py-0.5 text-xs">v2.0.0</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span className="text-primary-200">OCR Engine</span>
-                <span className="font-semibold">Tesseract 7</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span className="text-primary-200">Trạng thái</span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  <span className="font-semibold text-green-300">Hoạt động</span>
-                </span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span className="text-primary-200">Tổng trang</span>
-                <span className="font-semibold">{(metrics?.total_pages ?? 0).toLocaleString()}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 shadow-sm animate-fade-in-up" style={{ animationDelay: '900ms' }}>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
-              <svg className="w-5 h-5 text-accent-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              Bắt đầu nhanh
-            </h3>
-            <ul className="space-y-2">
-              {[
-                'Upload file bảng điểm PDF hoặc ảnh scan',
-                'Hệ thống tự động OCR nhận dạng dữ liệu',
-                'Kiểm tra và chỉnh sửa kết quả trích xuất',
-                'Xuất dữ liệu ra file Excel hoàn chỉnh',
-              ].map((step, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-gray-600 dark:text-slate-400">
-                  <span className="w-6 h-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
-                    {i + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
-      </div>
-
-      {/* ═══════════ 6. FOOTER RIBBON ═══════════ */}
-      <div className="text-center py-6 border-t border-gray-100 dark:border-slate-800">
-        <p className="text-xs text-gray-400 dark:text-slate-500">
-          Copyright © 2026 Bản quyền thuộc về Trung tâm Giáo dục Quốc phòng - An ninh Đại học Trà Vinh
-        </p>
-      </div>
+      )}
     </div>
   )
 }

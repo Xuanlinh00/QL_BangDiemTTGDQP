@@ -1,22 +1,17 @@
 import { Router, Request, Response } from 'express'
 import multer from 'multer'
-import path from 'path'
-import fs from 'fs'
+import mongoose from 'mongoose'
 import { DocumentModel, StudentRecord } from '../models'
 
 const router = Router()
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }) // 500MB limit
 
-// ── File storage on local disk ──
-const UPLOADS_DIR = path.resolve(__dirname, '../../uploads/docstore')
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true })
-}
+// ── Initialize GridFS buckets ──
+let gridFSBucket: mongoose.mongo.GridFSBucket | null = null
 
-function getFilePath(docId: string, mimeType?: string): string {
-  const ext = mimeType?.includes('spreadsheet') || mimeType?.includes('excel') ? '.xlsx' : '.pdf'
-  return path.join(UPLOADS_DIR, `${docId}${ext}`)
-}
+mongoose.connection.on('open', () => {
+  gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db!, { bucketName: 'docstore_files' })
+})
 
 // ── List all documents ──
 router.get('/', async (_req: Request, res: Response) => {
@@ -34,10 +29,15 @@ router.post('/upload', upload.array('files', 20), async (req: Request, res: Resp
     const files = req.files as Express.Multer.File[]
     if (!files?.length) return res.status(400).json({ success: false, error: 'No files' })
 
+    if (!gridFSBucket) {
+      return res.status(500).json({ success: false, error: 'GridFS not initialized' })
+    }
+
     const { folder, type, academicYear, cohort, className, trainingProgram } = req.body
     const created = []
 
     for (const f of files) {
+      // Create document record first
       const doc = await DocumentModel.create({
         name: Buffer.from(f.originalname, 'latin1').toString('utf8'),
         folder: folder || '',
@@ -54,9 +54,31 @@ router.post('/upload', upload.array('files', 20), async (req: Request, res: Resp
         trainingProgram,
       } as any)
 
-      // Save file to local disk instead of MongoDB
-      const filePath = getFilePath(doc._id.toString(), f.mimetype)
-      fs.writeFileSync(filePath, f.buffer)
+      // Upload file to GridFS
+      const uploadStream = gridFSBucket.openUploadStream(doc._id.toString(), {
+        metadata: {
+          docId: doc._id.toString(),
+          fileName: f.originalname,
+          mimeType: f.mimetype,
+          uploadedAt: new Date(),
+        },
+      })
+
+      uploadStream.on('error', (err) => {
+        console.error('GridFS upload error:', err)
+      })
+
+      uploadStream.end(f.buffer)
+
+      // Wait for upload to complete
+      await new Promise((resolve, reject) => {
+        uploadStream.on('finish', resolve)
+        uploadStream.on('error', reject)
+      })
+
+      // Update document with GridFS file ID
+      doc.gridfsFileId = uploadStream.id
+      await doc.save()
 
       created.push(doc.toObject())
     }
@@ -89,12 +111,20 @@ router.get('/:id/file', async (req: Request, res: Response) => {
     const doc = await DocumentModel.findById(req.params.id)
     if (!doc) return res.status(404).json({ success: false, error: 'Not found' })
 
-    // Try local disk first
-    const filePath = getFilePath(doc._id.toString(), doc.mimeType)
-    if (fs.existsSync(filePath)) {
-      res.set('Content-Type', doc.mimeType || 'application/pdf')
-      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`)
-      return res.send(fs.readFileSync(filePath))
+    if (!gridFSBucket) {
+      return res.status(500).json({ success: false, error: 'GridFS not initialized' })
+    }
+
+    // Try GridFS first
+    if (doc.gridfsFileId) {
+      try {
+        const downloadStream = gridFSBucket.openDownloadStream(doc.gridfsFileId)
+        res.set('Content-Type', doc.mimeType || 'application/pdf')
+        res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`)
+        return downloadStream.pipe(res)
+      } catch (err) {
+        console.warn('GridFS download failed, trying legacy fileData:', err)
+      }
     }
 
     // Fallback to MongoDB fileData (legacy)
@@ -130,9 +160,14 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const doc = await DocumentModel.findById(req.params.id)
     if (doc) {
-      // Clean up file on disk
-      const filePath = getFilePath(doc._id.toString(), doc.mimeType)
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+      // Delete from GridFS if exists
+      if (doc.gridfsFileId && gridFSBucket) {
+        try {
+          await gridFSBucket.delete(doc.gridfsFileId)
+        } catch (err) {
+          console.warn('GridFS delete failed:', err)
+        }
+      }
       await doc.deleteOne()
     }
     // Also clean up student records for this document

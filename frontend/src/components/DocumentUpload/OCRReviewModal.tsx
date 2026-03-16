@@ -170,25 +170,17 @@ function recordsToApiShape(records: StudentRecord[]) {
 function normalizeOcrText(raw: string): string {
   let text = raw.replace(/\r/g, '')
   
-  // ✅ Sửa O/o/Q/D → 0 khi kẹp giữa 2 chữ số hoặc đầu số (OCR nhầm 0 vs O)
-  text = text.replace(/(\d)[OoQqD](\d)/g, '$10$2')
-  text = text.replace(/\b[OoQD](\d{6,})/g, '0$1')  // Đầu MSSV: O10122001 → 010122001
+  // ✅ CONSERVATIVE: Chỉ sửa lỗi OCR rõ ràng, tránh sửa sai
+  // Sửa O/o → 0 CHỈ khi ở đầu MSSV (pattern: O + 7-10 chữ số)
+  text = text.replace(/\b[Oo](\d{7,10})\b/g, '0$1')  // O10122001 → 010122001
   
-  // ✅ Sửa l/I/|/i → 1 khi kẹp giữa 2 chữ số hoặc đầu số
-  text = text.replace(/(\d)[lI|i](\d)/g, '$11$2')
-  text = text.replace(/\b[lI|](\d{8,})/g, '1$1')  // Đầu MSSV: l10122001 → 110122001
+  // Sửa l/I → 1 CHỈ khi ở đầu MSSV (pattern: l/I + 8-10 chữ số)
+  text = text.replace(/\b[lI](\d{8,10})\b/g, '1$1')  // l10122001 → 110122001
   
-  // ✅ Sửa S/s → 5 khi trong chuỗi số
-  text = text.replace(/(\d)[Ss](\d)/g, '$15$2')
-  
-  // ✅ Sửa B → 8, G → 6 khi trong chuỗi số
-  text = text.replace(/(\d)[B](\d)/g, '$18$2')
-  text = text.replace(/(\d)[G](\d)/g, '$16$2')
-  
-  // ✅ Sửa dấu thập phân bị tách: "9 . 8" → "9.8" hoặc "9 , 8" → "9.8"
+  // Sửa dấu thập phân bị tách: "9 . 8" → "9.8" hoặc "9 , 8" → "9.8"
   text = text.replace(/(\d)\s*[.,]\s*(\d)/g, '$1.$2')
   
-  // ✅ Sửa các lỗi OCR phổ biến trong tên tiếng Việt
+  // ✅ Sửa các lỗi OCR phổ biến trong tên tiếng Việt (chỉ từ đơn lẻ)
   text = text.replace(/\bKinr\b/g, 'Kim')
   text = text.replace(/\bHtra\b/g, 'Hua')
   text = text.replace(/\bL6\b/g, 'Lê')
@@ -204,41 +196,22 @@ function normalizeOcrText(raw: string): string {
   text = text.replace(/\bTrucrng\b/g, 'Trương')
   text = text.replace(/\bDo4n\b/g, 'Đoàn')
   
-  // ✅ Sửa kết quả bị lỗi
+  // ✅ Sửa kết quả bị lỗi (chỉ từ đơn lẻ)
   text = text.replace(/\bD\?t\b/g, 'Đạt')
   text = text.replace(/\bDat\b/g, 'Đạt')
   text = text.replace(/\bKh6ng\b/g, 'Không')
-  text = text.replace(/\bdat\b/g, 'đạt')
   
   // ✅ Sửa xếp loại bị lỗi
   text = text.replace(/\bKh6\b/g, 'Khá')
   text = text.replace(/\bKha\b/g, 'Khá')
   text = text.replace(/\bGioi\b/g, 'Giỏi')
   text = text.replace(/\bC\s*ioi\b/g, 'Giỏi')
-  text = text.replace(/\bC\s*T\b/g, 'CT')
-  
-  // ✅ Ghép chuỗi số bị tách (MSSV bị tách thành "1 1 0 1 2 2 0 0 1")
-  // Ghép tối đa 3 lần để xử lý các trường hợp tách nhiều
-  for (let i = 0; i < 3; i++) {
-    text = text.replace(/\b(\d{1,3})(\s+)(\d{1,3})(?=\s+\d|\s*$)/g, (full, a, space, b, offset, src) => {
-      // Không ghép nếu xung quanh có ký tự / hoặc - (dấu ngày tháng)
-      const before = src[offset - 1] ?? ''
-      const after = src[offset + full.length] ?? ''
-      if (before === '/' || before === '-' || after === '/' || after === '-') return full
-      // Không ghép nếu khoảng cách quá lớn (>3 spaces = cột khác)
-      if (space.length > 3) return full
-      return `${a}${b}`
-    })
-  }
-  
-  // ✅ Sửa MSSV prefix bị nhầm: "0A210001" → "DA210001"
-  text = text.replace(/\b0([A-Z]{1,2}\d{5,8})\b/g, 'D$1')
   
   // ✅ Xóa ký tự nhiễu đầu dòng từ Tesseract
   text = text.replace(/^[\[\]{}|\\<>@#$%^&*~`]+/gm, '')
   
-  // ✅ Chuẩn hóa khoảng trắng: nhiều space → 1 space (trừ xuống dòng)
-  text = text.replace(/ {2,}/g, '  ')  // Giữ 2 spaces để parser nhận cột
+  // ✅ Chuẩn hóa khoảng trắng: nhiều space → 2 spaces (để parser nhận cột)
+  text = text.replace(/ {3,}/g, '  ')  // 3+ spaces → 2 spaces (column marker)
   
   return text
 }
