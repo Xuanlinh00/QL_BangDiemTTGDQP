@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
 import { activitiesApi } from '../services/api'
 
 interface MediaItem {
@@ -40,17 +39,17 @@ function getCategoryLabel(val: string) {
 
 function getCategoryColor(cat: string) {
   const map: Record<string, string> = {
-    education: 'bg-blue-100 text-blue-600',
-    training: 'bg-orange-100 text-orange-600',
-    sports: 'bg-green-100 text-green-600',
-    research: 'bg-purple-100 text-purple-600',
-    extracurricular: 'bg-teal-100 text-teal-600',
-    management: 'bg-indigo-100 text-indigo-600',
-    cooperation: 'bg-cyan-100 text-cyan-600',
-    development: 'bg-amber-100 text-amber-600',
-    news: 'bg-pink-100 text-pink-600',
+    education: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+    training: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+    sports: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+    research: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+    extracurricular: 'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
+    management: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
+    cooperation: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
+    development: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+    news: 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400',
   }
-  return map[cat] || 'bg-gray-100 text-gray-600'
+  return map[cat] || 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'
 }
 
 export default function PublicAbout() {
@@ -58,197 +57,284 @@ export default function PublicAbout() {
   const [expandedPost, setExpandedPost] = useState<string | null>(null)
   const [filterCategory, setFilterCategory] = useState<string>('all')
 
+  // Banner slides (có thể hardcode hoặc lấy từ API sau)
+  const [bannerSlides] = useState<Array<{ id: string; image: string | null }>>([
+    { id: '1', image: null }, // thay bằng URL thật nếu có
+    { id: '2', image: null },
+    { id: '3', image: null },
+  ])
+  const [currentBannerSlide, setCurrentBannerSlide] = useState(0)
+
+  // Lightbox state
+  const [mediaModal, setMediaModal] = useState<{
+    type: 'image' | 'video'
+    url: string
+    allMedia: Array<{ type: 'image' | 'video'; url: string }>
+    currentIndex: number
+  } | null>(null)
+
   const loadActivities = useCallback(async () => {
     try {
       const res = await activitiesApi.list()
       setActivities(res.data.data || [])
-    } catch { /* ignore */ }
+    } catch {
+      // silent fail
+    }
   }, [])
 
-  useEffect(() => { loadActivities() }, [loadActivities])
+  useEffect(() => {
+    loadActivities()
+  }, [loadActivities])
+
+  // Auto-rotate banner
+  useEffect(() => {
+    if (bannerSlides.length <= 1) return
+
+    const interval = setInterval(() => {
+      setCurrentBannerSlide(prev => (prev + 1) % bannerSlides.length)
+    }, 5500) // 5.5 giây
+
+    return () => clearInterval(interval)
+  }, [bannerSlides.length])
 
   const activeActivities = activities.filter(a => a.isActive)
-  const filtered = filterCategory === 'all'
-    ? activeActivities
-    : activeActivities.filter(a => a.category === filterCategory)
+  const filtered =
+    filterCategory === 'all'
+      ? activeActivities
+      : activeActivities.filter(a => a.category === filterCategory)
+
   const usedCategories = [...new Set(activeActivities.map(a => a.category))]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Top bar */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1.5">
-              <div className="w-9 h-9 bg-gradient-to-br from-red-600 to-red-700 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow">TVU</div>
-              <div className="w-9 h-9 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow">QP</div>
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-sm font-bold text-gray-800 leading-tight">HỆ THỐNG GDQP-AN</h1>
-              <p className="text-[10px] text-gray-500">Trường Đại học Trà Vinh</p>
-            </div>
-          </div>
-          <Link
-            to="/login"
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white text-sm font-medium rounded-xl transition-all shadow-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
-            Đăng nhập
-          </Link>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-        {/* ═══ INTRO CARD ═══ */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-red-700 via-red-600 to-yellow-500 p-6 lg:p-8 text-white">
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 w-16 h-16 bg-white/15 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/20">
-                <span className="text-3xl">🏛️</span>
-              </div>
-              <div>
-                <h2 className="text-lg lg:text-xl font-extrabold tracking-tight">
-                  TRUNG TÂM GIÁO DỤC QUỐC PHÒNG VÀ AN NINH
-                </h2>
-                <p className="text-white/80 text-sm mt-1">Trường Đại học Trà Vinh &bull; TVU</p>
-                <p className="text-white/70 text-xs mt-0.5">...</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-6 lg:p-8 space-y-4 text-sm text-gray-700 leading-relaxed">
-            <p>
-              Trung tâm Giáo dục Quốc phòng và An ninh thuộc Trường Đại học Trà Vinh thực hiện nhiệm vụ đào tạo, bồi dưỡng chương trình Giáo dục Quốc phòng và An ninh cho sinh viên Trường Đại học Trà Vinh; tổ chức các hoạt động giáo dục quốc phòng cho các đơn vị có nhu cầu, các cơ sở đào tạo khác theo đúng quy định của nhà nước; cấp chứng chỉ Giáo dục Quốc phòng và An ninh cho sinh viên sau khi hoàn thành chương trình học tập.
-            </p>
-            <p>
-              Giáo dục quốc phòng và an ninh là bộ phận của nền giáo dục quốc dân, một nội dung cơ bản trong xây dựng nền quốc phòng toàn dân, an ninh nhân dân; là môn học chính khóa trong chương trình giáo dục và đào tạo trong trung học phổ thông đến đại học và các trường chính trị, hành chính, đoàn thể.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="flex items-start gap-3">
-                <span className="text-lg">📞</span>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase">Điện thoại liên lạc</p>
-                  <p className="font-medium text-gray-800">...</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-lg">📍</span>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase">Cơ sở đào tạo</p>
-                  <p className="font-medium text-gray-800">Số 126, Nguyễn Thiện Thành, Khóm 4, Phường 5, TP. Trà Vinh, Trà Vinh</p>
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="space-y-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Banner Carousel - sạch sẽ, không nút chỉnh sửa */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-purple-600 to-teal-600 shadow-2xl">
+        {/* Subtle overlay */}
+        <div className="absolute inset-0 opacity-5 pointer-events-none">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(255,255,255,0.12),transparent_60%)]" />
         </div>
 
-        {/* ═══ ACTIVITIES / POSTS (read-only) ═══ */}
-        <div>
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-1.5 h-8 bg-gradient-to-b from-green-500 to-teal-500 rounded-full" />
-            <h2 className="text-xl font-bold text-gray-900">Hoạt động & Tin tức</h2>
-            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">
-              {activeActivities.length} bài đăng
+        {/* Slides */}
+        <div className="relative h-72 sm:h-80 md:h-[28rem] overflow-hidden">
+          {bannerSlides.map((slide, idx) => (
+            <div
+              key={slide.id}
+              className={`absolute inset-0 transition-all duration-1000 ease-in-out ${
+                idx === currentBannerSlide
+                  ? 'opacity-100 scale-100'
+                  : 'opacity-0 scale-105'
+              }`}
+            >
+              {slide.image ? (
+                <img
+                  src={slide.image}
+                  alt={`Banner ${idx + 1}`}
+                  className="w-full h-full object-cover brightness-90"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
+                  <div className="text-center text-white/40">
+                    <svg className="w-24 h-24 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-xl">Slide {idx + 1}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Arrows */}
+        {bannerSlides.length > 1 && (
+          <>
+            <button
+              onClick={() => setCurrentBannerSlide(prev => (prev - 1 + bannerSlides.length) % bannerSlides.length)}
+              className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur transition hover:scale-110"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setCurrentBannerSlide(prev => (prev + 1) % bannerSlides.length)}
+              className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur transition hover:scale-110"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        )}
+
+        {/* Indicators */}
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+          {bannerSlides.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentBannerSlide(idx)}
+              className={`w-3 h-3 rounded-full transition-all ${
+                idx === currentBannerSlide ? 'bg-white scale-125 shadow-md' : 'bg-white/60 hover:bg-white'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Content overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 md:px-16 bg-gradient-to-t from-black/70 via-black/40 to-transparent">
+          <div className="inline-block mb-6 px-6 py-2 bg-white/10 backdrop-blur-lg rounded-full border border-white/20 shadow-lg">
+            <span className="text-sm md:text-base font-semibold text-white uppercase tracking-widest">
+              Hoạt động & Tin tức
             </span>
           </div>
 
-          {/* Category filter chips */}
-          <div className="flex flex-wrap gap-2 mb-5">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 leading-tight drop-shadow-2xl">
+            Khám phá các hoạt động nổi bật
+          </h1>
+
+          <p className="text-lg md:text-xl text-white/90 max-w-3xl mx-auto leading-relaxed drop-shadow-lg">
+            Cập nhật những tin tức mới nhất, các hoạt động đào tạo, sự kiện và những thành tựu đáng tự hào của tổ chức
+          </p>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-6 text-white/90 text-base">
+            <div className="flex items-center gap-3 bg-black/30 px-5 py-2.5 rounded-full backdrop-blur-sm">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.5 1.5H5.75A2.25 2.25 0 003.5 3.75v10.5a2.25 2.25 0 002.25 2.25h8.5a2.25 2.25 0 002.25-2.25V6.5m-11-3v3m6-3v3m-6 6h6" />
+              </svg>
+              <span>{activeActivities.length} bài đăng</span>
+            </div>
+            <div className="flex items-center gap-3 bg-black/30 px-5 py-2.5 rounded-full backdrop-blur-sm">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.3A4.5 4.5 0 1113.5 13H11V9.413l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13H5.5z" clipRule="evenodd" />
+              </svg>
+              <span>{usedCategories.length} danh mục</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Danh sách hoạt động */}
+      <div>
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-1.5 h-9 bg-gradient-to-b from-teal-500 to-emerald-500 rounded-full" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Hoạt động & Tin tức</h2>
+          <span className="text-sm bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-3 py-1 rounded-full">
+            {activeActivities.length} bài đăng
+          </span>
+        </div>
+
+        {/* Filter */}
+        <div className="flex flex-wrap gap-2.5 mb-8">
+          <button
+            onClick={() => setFilterCategory('all')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              filterCategory === 'all'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            Tất cả
+          </button>
+          {usedCategories.map(cat => (
             <button
-              onClick={() => setFilterCategory('all')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                filterCategory === 'all'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              key={cat}
+              onClick={() => setFilterCategory(cat)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                filterCategory === cat
+                  ? 'bg-teal-600 text-white shadow-md'
+                  : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
               }`}
             >
-              Tất cả
+              {getCategoryLabel(cat)}
             </button>
-            {usedCategories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  filterCategory === cat
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {getCategoryLabel(cat)}
-              </button>
-            ))}
-          </div>
+          ))}
+        </div>
 
-          {/* Posts list (no edit/delete buttons) */}
-          <div className="space-y-5">
+        {/* Danh sách bài */}
+        {filtered.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((activity, i) => {
               const isExpanded = expandedPost === activity._id
-              const hasMedia = activity.media && activity.media.length > 0
+              const hasMedia = activity.media?.length > 0
+
               return (
                 <div
                   key={activity._id}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300"
-                  style={{ animationDelay: `${i * 60}ms` }}
+                  className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-md overflow-hidden hover:shadow-xl transition-all duration-300"
+                  style={{ animationDelay: `${i * 80}ms` }}
                 >
-                  <div className="p-5 pb-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <span className="text-3xl flex-shrink-0">{activity.icon}</span>
-                      <div className="min-w-0">
-                        <h3 className="text-base font-bold text-gray-900 leading-tight">{activity.title}</h3>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${getCategoryColor(activity.category)}`}>
+                  <div className="p-6">
+                    <div className="flex items-start gap-4">
+                      <span className="text-4xl flex-shrink-0">{activity.icon}</span>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                          {activity.title}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryColor(activity.category)}`}>
                             {getCategoryLabel(activity.category)}
                           </span>
                           {activity.createdAt && (
-                            <span className="text-xs text-gray-400">
-                              {new Date(activity.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            <span className="text-sm text-gray-500 dark:text-slate-400">
+                              {new Date(activity.createdAt).toLocaleDateString('vi-VN', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              })}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600 mt-3 leading-relaxed">{activity.description}</p>
+                    <p className="text-gray-600 dark:text-slate-300 leading-relaxed mb-4">
+                      {activity.description}
+                    </p>
 
                     {activity.content && (
-                      <>
+                      <div>
                         {isExpanded && (
-                          <div className="mt-3 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border-t border-gray-100 pt-3">
+                          <div className="mt-4 text-gray-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap border-t border-gray-200 dark:border-slate-700 pt-4">
                             {activity.content}
                           </div>
                         )}
                         <button
                           onClick={() => setExpandedPost(isExpanded ? null : activity._id)}
-                          className="mt-2 text-xs text-primary-500 hover:text-primary-600 font-medium"
+                          className="mt-3 text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium text-sm transition"
                         >
-                          {isExpanded ? '← Thu gọn' : 'Xem thêm →'}
+                          {isExpanded ? 'Thu gọn ↑' : 'Xem thêm ↓'}
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
 
                   {hasMedia && (
-                    <div className={`px-5 pb-5 grid gap-2 ${
-                      activity.media.length === 1 ? 'grid-cols-1' :
-                      activity.media.length === 2 ? 'grid-cols-2' :
-                      'grid-cols-2 md:grid-cols-3'
-                    }`}>
+                    <div className={`px-6 pb-6 grid gap-4 ${activity.media.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                       {activity.media.map((m, idx) => {
-                        const mediaUrl = activitiesApi.getMediaUrl(activity._id, idx)
+                        const url = activitiesApi.getMediaUrl(activity._id, idx)
                         const isVideo = m.mimeType.startsWith('video/')
-                        return isVideo ? (
-                          <video
-                            key={m._id || idx}
-                            src={mediaUrl}
-                            controls
-                            className="w-full rounded-xl border border-gray-200 max-h-80 object-cover"
-                          />
-                        ) : (
-                          <img
-                            key={m._id || idx}
-                            src={mediaUrl}
-                            alt={m.fileName}
-                            className="w-full rounded-xl border border-gray-200 max-h-80 object-cover"
-                          />
+                        const allMedia = activity.media.map((media, i) => ({
+                          type: media.mimeType.startsWith('video/') ? 'video' : 'image',
+                          url: activitiesApi.getMediaUrl(activity._id, i),
+                        })) as Array<{ type: 'image' | 'video'; url: string }>
+
+                        return (
+                          <div
+                            key={idx}
+                            className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 cursor-pointer group aspect-video bg-gray-100 dark:bg-slate-900"
+                            onClick={() => setMediaModal({ type: isVideo ? 'video' : 'image', url, allMedia, currentIndex: idx })}
+                          >
+                            {isVideo ? (
+                              <video src={url} className="w-full h-full object-cover" muted loop playsInline />
+                            ) : (
+                              <img src={url} alt={m.fileName} className="w-full h-full object-cover" />
+                            )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                              <svg className="w-12 h-12 text-white opacity-0 group-hover:opacity-80 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                              </svg>
+                            </div>
+                          </div>
                         )
                       })}
                     </div>
@@ -256,23 +342,82 @@ export default function PublicAbout() {
                 </div>
               )
             })}
+          </div>
+        ) : (
+          <div className="text-center py-16 text-gray-500 dark:text-slate-400">
+            <span className="text-6xl block mb-4">📭</span>
+            <p className="text-lg">
+              Chưa có bài đăng nào{filterCategory !== 'all' ? ` trong danh mục "${getCategoryLabel(filterCategory)}"` : ''}
+            </p>
+          </div>
+        )}
+      </div>
 
-            {filtered.length === 0 && (
-              <div className="text-center py-12 text-gray-400">
-                <span className="text-4xl block mb-2">📭</span>
-                <p className="text-sm">Chưa có bài đăng nào{filterCategory !== 'all' ? ' trong danh mục này' : ''}</p>
+      {/* Lightbox */}
+      {mediaModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
+          onClick={() => setMediaModal(null)}
+        >
+          <div className="relative max-w-6xl w-full" onClick={e => e.stopPropagation()}>
+            <button
+              className="absolute -top-12 right-4 text-white text-5xl hover:text-gray-300 transition"
+              onClick={() => setMediaModal(null)}
+            >
+              ×
+            </button>
+
+            {mediaModal.type === 'image' ? (
+              <img
+                src={mediaModal.url}
+                alt="Preview"
+                className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain mx-auto"
+              />
+            ) : (
+              <video
+                src={mediaModal.url}
+                controls
+                autoPlay
+                className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl bg-black mx-auto"
+              />
+            )}
+
+            {mediaModal.allMedia.length > 1 && (
+              <div className="mt-6 flex justify-center gap-4">
+                <button
+                  onClick={() => {
+                    const newIdx = mediaModal.currentIndex === 0 ? mediaModal.allMedia.length - 1 : mediaModal.currentIndex - 1
+                    const newMedia = mediaModal.allMedia[newIdx]
+                    setMediaModal({ ...mediaModal, currentIndex: newIdx, type: newMedia.type as 'image' | 'video', url: newMedia.url })
+                  }}
+                  className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                <div className="px-6 py-3 bg-white/10 rounded-full text-white">
+                  {mediaModal.currentIndex + 1} / {mediaModal.allMedia.length}
+                </div>
+
+                <button
+                  onClick={() => {
+                    const newIdx = (mediaModal.currentIndex + 1) % mediaModal.allMedia.length
+                    const newMedia = mediaModal.allMedia[newIdx]
+                    setMediaModal({ ...mediaModal, currentIndex: newIdx, type: newMedia.type as 'image' | 'video', url: newMedia.url })
+                  }}
+                  className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             )}
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-center text-xs text-gray-400">
-          Copyright © 2026 Bản quyền thuộc về Trung tâm Giáo dục Quốc phòng - An ninh Đại học Trà Vinh
-        </div>
-      </footer>
+      )}
     </div>
   )
 }

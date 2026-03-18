@@ -56,22 +56,37 @@ function getCategoryColor(cat: string) {
 
 export default function About() {
   const [activities, setActivities] = useState<Activity[]>([])
-  const [showModal, setShowModal] = useState(false) // Modal đăng bài
+  const [showModal, setShowModal] = useState(false)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [expandedPost, setExpandedPost] = useState<string | null>(null)
   const [filterCategory, setFilterCategory] = useState<string>('all')
-  
+  const [bannerSlides, setBannerSlides] = useState<Array<{ id: string; image: string | null }>>([
+    { id: '1', image: null },
+    { id: '2', image: null },
+    { id: '3', image: null },
+  ])
+  const [currentBannerSlide, setCurrentBannerSlide] = useState(0)
+
   // State quản lý việc xem ảnh/video toàn màn hình
-  const [mediaModal, setMediaModal] = useState<{ type: 'image' | 'video', url: string } | null>(null)
+  const [mediaModal, setMediaModal] = useState<{
+    type: 'image' | 'video'
+    url: string
+    allMedia: Array<{ type: 'image' | 'video'; url: string }>
+    currentIndex: number
+  } | null>(null)
 
   const loadActivities = useCallback(async () => {
     try {
       const res = await activitiesApi.list()
       setActivities(res.data.data || [])
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
   }, [])
 
-  useEffect(() => { loadActivities() }, [loadActivities])
+  useEffect(() => {
+    loadActivities()
+  }, [loadActivities])
 
   useEffect(() => {
     if (activities.length === 0) {
@@ -84,33 +99,179 @@ export default function About() {
     try {
       await activitiesApi.delete(id)
       setActivities(prev => prev.filter(a => a._id !== id))
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
   }, [])
 
-  const handleSave = useCallback(async (data: Partial<Activity>, files?: File[], removeMedia?: number[]) => {
-    try {
-      if (editingActivity) {
-        const res = await activitiesApi.update(editingActivity._id, data as Record<string, unknown>, files, removeMedia)
-        setActivities(prev => prev.map(a => a._id === editingActivity._id ? res.data.data : a))
-      } else {
-        const res = await activitiesApi.create(data as Record<string, unknown>, files)
-        setActivities(prev => [...prev, res.data.data])
+  const handleSave = useCallback(
+    async (data: Partial<Activity>, files?: File[], removeMedia?: number[]) => {
+      try {
+        if (editingActivity) {
+          const res = await activitiesApi.update(
+            editingActivity._id,
+            data as Record<string, unknown>,
+            files,
+            removeMedia
+          )
+          setActivities(prev =>
+            prev.map(a => (a._id === editingActivity._id ? res.data.data : a))
+          )
+        } else {
+          const res = await activitiesApi.create(data as Record<string, unknown>, files)
+          setActivities(prev => [...prev, res.data.data])
+        }
+        setShowModal(false)
+        setEditingActivity(null)
+      } catch {
+        // ignore
       }
-      setShowModal(false)
-      setEditingActivity(null)
-    } catch { /* ignore */ }
-  }, [editingActivity])
+    },
+    [editingActivity]
+  )
 
   const activeActivities = activities.filter(a => a.isActive)
   const inactiveActivities = activities.filter(a => !a.isActive)
-  const filtered = filterCategory === 'all'
-    ? activeActivities
-    : activeActivities.filter(a => a.category === filterCategory)
+  const filtered =
+    filterCategory === 'all'
+      ? activeActivities
+      : activeActivities.filter(a => a.category === filterCategory)
 
   const usedCategories = [...new Set(activeActivities.map(a => a.category))]
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto -mt-2">
+     {/* State kiểm tra quyền admin - bạn thay bằng logic thật của app */}
+
+{/* ═══ BANNER CAROUSEL (CẢI TIẾN: AUTO-ROTATE + SMOOTH TRANSITION + ĐẸP HƠN) ═══ */}
+<div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-purple-600 to-teal-600 shadow-2xl">
+  {/* Background subtle overlay */}
+  <div className="absolute inset-0 opacity-5 pointer-events-none">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(255,255,255,0.1),transparent_50%)]" />
+  </div>
+
+  {/* Slides container - absolute để transition mượt */}
+  <div className="relative h-72 md:h-96 overflow-hidden">
+    {bannerSlides.map((slide, idx) => (
+      <div
+        key={slide.id}
+        className={`absolute inset-0 transition-all duration-800 ease-in-out transform ${
+          idx === currentBannerSlide
+            ? 'opacity-100 translate-x-0 scale-100'
+            : idx === (currentBannerSlide + 1) % bannerSlides.length ||
+              (currentBannerSlide === bannerSlides.length - 1 && idx === 0)
+            ? 'opacity-0 translate-x-full scale-105'
+            : 'opacity-0 -translate-x-full scale-95'
+        }`}
+      >
+        {slide.image ? (
+          <img
+            src={slide.image}
+            alt={`Banner slide ${idx + 1}`}
+            className="w-full h-full object-cover brightness-90"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+            <div className="text-center text-white/60">
+              <svg className="w-20 h-20 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-lg">Slide {idx + 1} - Chưa có hình</p>
+            </div>
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+
+  {/* Navigation arrows */}
+  {bannerSlides.length > 1 && (
+    <>
+      <button
+        onClick={() => setCurrentBannerSlide(prev => (prev - 1 + bannerSlides.length) % bannerSlides.length)}
+        className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-black/30 hover:bg-black/50 text-white backdrop-blur-md border border-white/20 transition-all hover:scale-110"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+      </button>
+      <button
+        onClick={() => setCurrentBannerSlide(prev => (prev + 1) % bannerSlides.length)}
+        className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full bg-black/30 hover:bg-black/50 text-white backdrop-blur-md border border-white/20 transition-all hover:scale-110"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+      </button>
+    </>
+  )}
+
+  {/* Indicators */}
+  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-20">
+    {bannerSlides.map((_, idx) => (
+      <button
+        key={idx}
+        onClick={() => setCurrentBannerSlide(idx)}
+        className={`w-3 h-3 rounded-full transition-all duration-300 ${
+          idx === currentBannerSlide
+            ? 'bg-white scale-125 shadow-lg'
+            : 'bg-white/50 hover:bg-white/80'
+        }`}
+      />
+    ))}
+  </div>
+
+  {/* Banner content overlay */}
+  <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 md:px-12 bg-gradient-to-t from-black/60 via-black/30 to-transparent">
+    <div className="inline-block mb-6 px-6 py-2 bg-white/15 backdrop-blur-lg rounded-full border border-white/20 shadow-lg">
+      <span className="text-sm md:text-base font-semibold text-white uppercase tracking-widest">Hoạt động & Tin tức</span>
+    </div>
+    
+    <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 md:mb-6 leading-tight drop-shadow-2xl">
+      Khám phá các hoạt động nổi bật
+    </h1>
+    
+    <p className="text-base md:text-xl text-white/90 max-w-3xl mx-auto leading-relaxed drop-shadow-lg">
+      Cập nhật những tin tức mới nhất, các hoạt động đào tạo, sự kiện và những thành tựu đáng tự hào của tổ chức
+    </p>
+
+    <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-white/90 text-sm md:text-base">
+      <div className="flex items-center gap-3 bg-black/30 px-4 py-2 rounded-full backdrop-blur-sm">
+        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10.5 1.5H5.75A2.25 2.25 0 003.5 3.75v10.5a2.25 2.25 0 002.25 2.25h8.5a2.25 2.25 0 002.25-2.25V6.5m-11-3v3m6-3v3m-6 6h6" /></svg>
+        <span>{activeActivities.length} bài đăng</span>
+      </div>
+      <div className="flex items-center gap-3 bg-black/30 px-4 py-2 rounded-full backdrop-blur-sm">
+        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.3A4.5 4.5 0 1113.5 13H11V9.413l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13H5.5z" clipRule="evenodd" /></svg>
+        <span>{usedCategories.length} danh mục</span>
+      </div>
+    </div>
+
+    {/* Upload button */}
+    <div className="mt-10">
+      <label className="inline-flex items-center gap-3 px-6 py-3 bg-white/20 hover:bg-white/30 text-white font-medium rounded-xl transition-all backdrop-blur-md border border-white/30 cursor-pointer shadow-lg hover:shadow-xl hover:scale-105">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        Thêm hình cho slide {currentBannerSlide + 1}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const data = ev.target?.result as string;
+                setBannerSlides(prev => {
+                  const updated = [...prev];
+                  updated[currentBannerSlide] = { ...updated[currentBannerSlide], image: data };
+                  return updated;
+                });
+              };
+              reader.readAsDataURL(file);
+            }
+            e.target.value = '';
+          }}
+          className="hidden"
+        />
+      </label>
+    </div>
+  </div>
+</div>
       {/* ═══ ACTIVITIES / POSTS SECTION ═══ */}
       <div>
         <div className="flex items-center justify-between mb-5">
@@ -122,10 +283,15 @@ export default function About() {
             </span>
           </div>
           <button
-            onClick={() => { setEditingActivity(null); setShowModal(true) }}
+            onClick={() => {
+              setEditingActivity(null)
+              setShowModal(true)
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
             Đăng bài mới
           </button>
         </div>
@@ -162,6 +328,7 @@ export default function About() {
           {filtered.map((activity, i) => {
             const isExpanded = expandedPost === activity._id
             const hasMedia = activity.media && activity.media.length > 0
+
             return (
               <div
                 key={activity._id}
@@ -178,42 +345,66 @@ export default function About() {
                           {activity.title}
                         </h3>
                         <div className="flex items-center gap-2 mt-1.5">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${getCategoryColor(activity.category)}`}>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${getCategoryColor(
+                              activity.category
+                            )}`}
+                          >
                             {getCategoryLabel(activity.category)}
                           </span>
                           {activity.createdAt && (
                             <span className="text-xs text-gray-400 dark:text-slate-500">
-                              {new Date(activity.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                              {new Date(activity.createdAt).toLocaleDateString('vi-VN', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              })}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
+
                     {/* Admin actions */}
                     <div className="flex gap-1 flex-shrink-0">
                       <button
-                        onClick={() => { setEditingActivity(activity); setShowModal(true) }}
+                        onClick={() => {
+                          setEditingActivity(activity)
+                          setShowModal(true)
+                        }}
                         className="p-1.5 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 text-blue-600 dark:text-blue-400 rounded-lg transition-colors"
                         title="Sửa"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
                       </button>
                       <button
                         onClick={() => handleDelete(activity._id)}
                         className="p-1.5 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 text-red-600 dark:text-red-400 rounded-lg transition-colors"
                         title="Xóa"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
                       </button>
                     </div>
                   </div>
 
-                  {/* Description */}
                   <p className="text-sm text-gray-600 dark:text-slate-400 mt-3 leading-relaxed">
                     {activity.description}
                   </p>
 
-                  {/* Extended content (collapsible) */}
                   {activity.content && (
                     <>
                       {isExpanded && (
@@ -233,31 +424,62 @@ export default function About() {
 
                 {/* Media gallery */}
                 {hasMedia && (
-                  <div className={`px-5 pb-5 grid gap-2 ${
-                    activity.media.length === 1 ? 'grid-cols-1' :
-                    activity.media.length === 2 ? 'grid-cols-2' :
-                    'grid-cols-2 md:grid-cols-3'
-                  }`}>
+                  <div
+                    className={`px-5 pb-5 ${
+                      activity.media.length === 1 ? 'flex justify-center' : 'grid gap-3'
+                    } ${
+                      activity.media.length === 1
+                        ? ''
+                        : activity.media.length === 2
+                        ? 'grid-cols-1 sm:grid-cols-2'
+                        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                    }`}
+                  >
                     {activity.media.map((m, idx) => {
                       const mediaUrl = activitiesApi.getMediaUrl(activity._id, idx)
                       const isVideo = m.mimeType.startsWith('video/')
+                      const allMedia = activity.media.map((media, i) => ({
+                        type: (media.mimeType.startsWith('video/') ? 'video' : 'image') as 'image' | 'video',
+                        url: activitiesApi.getMediaUrl(activity._id, i),
+                      }))
+
                       return isVideo ? (
-                        <div key={m._id || idx} className="relative">
+                        <div
+                          key={m._id || idx}
+                          className={`relative group overflow-hidden rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 aspect-video ${
+                            activity.media.length === 1 ? 'max-w-2xl w-full' : ''
+                          }`}
+                        >
                           <video
                             src={mediaUrl}
                             controls
-                            className="w-full rounded-xl border border-gray-200 dark:border-slate-600 max-h-80 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setMediaModal({ type: 'video', url: mediaUrl })}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                            onClick={() => setMediaModal({ type: 'video', url: mediaUrl, allMedia, currentIndex: idx })}
                           />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                            <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                            </svg>
+                          </div>
                         </div>
                       ) : (
-                        <div key={m._id || idx} className="relative">
+                        <div
+                          key={m._id || idx}
+                          className={`relative group overflow-hidden rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 aspect-video ${
+                            activity.media.length === 1 ? 'max-w-2xl w-full' : ''
+                          }`}
+                        >
                           <img
                             src={mediaUrl}
                             alt={m.fileName}
-                            className="w-full rounded-xl border border-gray-200 dark:border-slate-600 max-h-80 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setMediaModal({ type: 'image', url: mediaUrl })}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                            onClick={() => setMediaModal({ type: 'image', url: mediaUrl, allMedia, currentIndex: idx })}
                           />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                            <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                            </svg>
+                          </div>
                         </div>
                       )
                     })}
@@ -270,7 +492,9 @@ export default function About() {
           {filtered.length === 0 && (
             <div className="text-center py-12 text-gray-400 dark:text-slate-500">
               <span className="text-4xl block mb-2">📭</span>
-              <p className="text-sm">Chưa có bài đăng nào{filterCategory !== 'all' ? ' trong danh mục này' : ''}</p>
+              <p className="text-sm">
+                Chưa có bài đăng nào{filterCategory !== 'all' ? ' trong danh mục này' : ''}
+              </p>
             </div>
           )}
         </div>
@@ -283,20 +507,52 @@ export default function About() {
             </summary>
             <div className="space-y-3 mt-3">
               {inactiveActivities.map(activity => (
-                <div key={activity._id} className="relative bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200 dark:border-slate-700 opacity-60">
+                <div
+                  key={activity._id}
+                  className="relative bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200 dark:border-slate-700 opacity-60"
+                >
                   <div className="absolute top-3 right-3 flex gap-1">
-                    <button onClick={() => { setEditingActivity(activity); setShowModal(true) }} className="p-1.5 bg-blue-100 text-blue-600 rounded-lg" title="Sửa">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    <button
+                      onClick={() => {
+                        setEditingActivity(activity)
+                        setShowModal(true)
+                      }}
+                      className="p-1.5 bg-blue-100 text-blue-600 rounded-lg"
+                      title="Sửa"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                      </svg>
                     </button>
-                    <button onClick={() => handleDelete(activity._id)} className="p-1.5 bg-red-100 text-red-600 rounded-lg" title="Xóa">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <button
+                      onClick={() => handleDelete(activity._id)}
+                      className="p-1.5 bg-red-100 text-red-600 rounded-lg"
+                      title="Xóa"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
                     </button>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-2xl grayscale">{activity.icon}</span>
                     <div>
-                      <h4 className="text-sm font-bold text-gray-500 dark:text-slate-400">{activity.title}</h4>
-                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 line-clamp-2">{activity.description}</p>
+                      <h4 className="text-sm font-bold text-gray-500 dark:text-slate-400">
+                        {activity.title}
+                      </h4>
+                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 line-clamp-2">
+                        {activity.description}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -306,33 +562,135 @@ export default function About() {
         )}
       </div>
 
-      {/* ═══ TRÌNH XEM ẢNH/VIDEO (Lightbox) ═══ */}
+      {/* Lightbox xem media */}
       {mediaModal && (
-        <div 
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 transition-opacity" 
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 transition-opacity"
           onClick={() => setMediaModal(null)}
         >
-          <div className="relative max-w-5xl w-full flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
-            <button 
-              className="absolute -top-12 right-0 md:-right-12 text-white/70 hover:text-white text-4xl font-light hover:scale-110 transition-all" 
+          <div
+            className="relative max-w-5xl w-full flex flex-col items-center justify-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              className="absolute -top-12 right-0 md:-right-12 text-white/70 hover:text-white text-4xl font-light hover:scale-110 transition-all"
               onClick={() => setMediaModal(null)}
             >
-              &times;
+              ×
             </button>
-            {mediaModal.type === 'image' ? (
-              <img src={mediaModal.url} alt="Preview" className="max-w-full max-h-[85vh] rounded-xl shadow-2xl object-contain" />
-            ) : (
-              <video src={mediaModal.url} controls autoPlay className="max-w-full max-h-[85vh] rounded-xl shadow-2xl bg-black" />
+
+            <div className="w-full">
+              {mediaModal.type === 'image' ? (
+                <img
+                  src={mediaModal.url}
+                  alt="Preview"
+                  className="max-w-full max-h-[75vh] rounded-xl shadow-2xl object-contain mx-auto"
+                />
+              ) : (
+                <video
+                  src={mediaModal.url}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-[75vh] rounded-xl shadow-2xl bg-black mx-auto"
+                />
+              )}
+            </div>
+
+            {mediaModal.allMedia.length > 1 && (
+              <>
+                <div className="mt-6 flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => {
+                      const newIndex =
+                        mediaModal.currentIndex === 0
+                          ? mediaModal.allMedia.length - 1
+                          : mediaModal.currentIndex - 1
+                      const newMedia = mediaModal.allMedia[newIndex]
+                      setMediaModal({
+                        ...mediaModal,
+                        currentIndex: newIndex,
+                        type: newMedia.type,
+                        url: newMedia.url,
+                      })
+                    }}
+                    className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm border border-white/20"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20">
+                    <span className="text-white text-sm font-medium">{mediaModal.currentIndex + 1}</span>
+                    <span className="text-white/50">/</span>
+                    <span className="text-white/70 text-sm">{mediaModal.allMedia.length}</span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const newIndex = (mediaModal.currentIndex + 1) % mediaModal.allMedia.length
+                      const newMedia = mediaModal.allMedia[newIndex]
+                      setMediaModal({
+                        ...mediaModal,
+                        currentIndex: newIndex,
+                        type: newMedia.type,
+                        url: newMedia.url,
+                      })
+                    }}
+                    className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-sm border border-white/20"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="mt-6 flex gap-2 justify-center flex-wrap max-w-2xl">
+                  {mediaModal.allMedia.map((media, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() =>
+                        setMediaModal({
+                          ...mediaModal,
+                          currentIndex: idx,
+                          type: media.type,
+                          url: media.url,
+                        })
+                      }
+                      className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                        idx === mediaModal.currentIndex
+                          ? 'border-white scale-110'
+                          : 'border-white/30 hover:border-white/60 opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      {media.type === 'video' ? (
+                        <div className="w-full h-full bg-gray-700 flex items-center justify-center text-white text-xl">
+                          🎬
+                        </div>
+                      ) : (
+                        <img
+                          src={media.url}
+                          alt={`Thumbnail ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
       )}
 
-      {/* Activity Add/Edit Modal */}
+      {/* Modal thêm/sửa activity */}
       {showModal && (
         <ActivityModal
           activity={editingActivity}
-          onClose={() => { setShowModal(false); setEditingActivity(null) }}
+          onClose={() => {
+            setShowModal(false)
+            setEditingActivity(null)
+          }}
           onSave={handleSave}
         />
       )}
@@ -340,11 +698,15 @@ export default function About() {
   )
 }
 
-/* ══════════════════════════════════════════
-   Activity Add/Edit Modal (with media upload)
-   ══════════════════════════════════════════ */
+/* ──────────────────────────────────────────
+   Activity Add/Edit Modal
+────────────────────────────────────────── */
 
-function ActivityModal({ activity, onClose, onSave }: {
+function ActivityModal({
+  activity,
+  onClose,
+  onSave,
+}: {
   activity: Activity | null
   onClose: () => void
   onSave: (data: Partial<Activity>, files?: File[], removeMedia?: number[]) => void
@@ -365,7 +727,6 @@ function ActivityModal({ activity, onClose, onSave }: {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     setNewFiles(prev => [...prev, ...files])
-    // Generate previews
     files.forEach(f => {
       const url = URL.createObjectURL(f)
       setPreviewUrls(prev => [...prev, url])
@@ -389,7 +750,7 @@ function ActivityModal({ activity, onClose, onSave }: {
     onSave(
       { title: title.trim(), description: description.trim(), content: content.trim(), icon, category, order, isActive },
       newFiles.length > 0 ? newFiles : undefined,
-      removeIndices.length > 0 ? removeIndices : undefined,
+      removeIndices.length > 0 ? removeIndices : undefined
     )
   }
 
@@ -400,98 +761,155 @@ function ActivityModal({ activity, onClose, onSave }: {
           <h2 className="text-lg font-bold text-gray-800 dark:text-white">
             {activity ? 'Sửa bài đăng' : 'Đăng bài mới'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white text-2xl">&times;</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white text-2xl"
+          >
+            ×
+          </button>
         </div>
+
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Icon picker */}
+          {/* Icon */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Biểu tượng</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+              Biểu tượng
+            </label>
             <div className="flex flex-wrap gap-2">
               {ICON_OPTIONS.map(ic => (
                 <button
                   key={ic}
                   type="button"
                   onClick={() => setIcon(ic)}
-                  className={`w-10 h-10 text-xl flex items-center justify-center rounded-xl border-2 transition-all ${icon === ic ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 scale-110' : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'}`}
+                  className={`w-10 h-10 text-xl flex items-center justify-center rounded-xl border-2 transition-all ${
+                    icon === ic
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 scale-110'
+                      : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'
+                  }`}
                 >
                   {ic}
                 </button>
               ))}
             </div>
           </div>
+
           {/* Title */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Tiêu đề *</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Tiêu đề *
+            </label>
             <input
-              value={title} onChange={e => setTitle(e.target.value)}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
               placeholder="VD: Đào tạo GDQP-AN"
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
             />
           </div>
+
           {/* Description */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Mô tả ngắn</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Mô tả ngắn
+            </label>
             <textarea
-              value={description} onChange={e => setDescription(e.target.value)}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
               rows={2}
               placeholder="Tóm tắt nội dung..."
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
             />
           </div>
-          {/* Content (full article) */}
+
+          {/* Content */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Nội dung chi tiết</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Nội dung chi tiết
+            </label>
             <textarea
-              value={content} onChange={e => setContent(e.target.value)}
+              value={content}
+              onChange={e => setContent(e.target.value)}
               rows={5}
               placeholder="Nội dung bài viết đầy đủ..."
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
             />
           </div>
-          {/* Category & Order */}
+
+          {/* Category + Order */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Danh mục</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                Danh mục
+              </label>
               <select
-                value={category} onChange={e => setCategory(e.target.value)}
+                value={category}
+                onChange={e => setCategory(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 outline-none"
               >
                 {CATEGORY_OPTIONS.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Thứ tự</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                Thứ tự
+              </label>
               <input
-                type="number" value={order} onChange={e => setOrder(Number(e.target.value))}
+                type="number"
+                value={order}
+                onChange={e => setOrder(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 outline-none"
               />
             </div>
           </div>
-          {/* Media upload */}
+
+          {/* Media */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Hình ảnh / Video</label>
-            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-xl p-4 cursor-pointer hover:border-primary-400 transition-colors">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              <span className="text-sm text-gray-500 dark:text-slate-400">Chọn hình ảnh hoặc video</span>
-              <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} className="hidden" />
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+              Hình ảnh / Video
             </label>
-            {/* Existing media (edit mode) */}
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-xl p-4 cursor-pointer hover:border-primary-400 transition-colors">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              <span className="text-sm text-gray-500 dark:text-slate-400">Chọn hình ảnh hoặc video</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+
+            {/* Existing media */}
             {existingMedia.length > 0 && (
               <div className="mt-3">
-                <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Media hiện có (nhấn để đánh dấu xóa):</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">
+                  Media hiện có (nhấn để đánh dấu xóa):
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {existingMedia.map((m, idx) => (
                     <div
                       key={m._id || idx}
                       onClick={() => toggleRemoveExisting(idx)}
                       className={`relative w-20 h-20 rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${
-                        removeIndices.includes(idx) ? 'border-red-500 opacity-40' : 'border-gray-200 dark:border-slate-600'
+                        removeIndices.includes(idx)
+                          ? 'border-red-500 opacity-40'
+                          : 'border-gray-200 dark:border-slate-600'
                       }`}
                     >
                       {m.mimeType.startsWith('video/') ? (
-                        <div className="w-full h-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-xl">🎬</div>
+                        <div className="w-full h-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-xl">
+                          🎬
+                        </div>
                       ) : (
                         <img
                           src={activitiesApi.getMediaUrl(activity!._id, idx)}
@@ -501,7 +919,19 @@ function ActivityModal({ activity, onClose, onSave }: {
                       )}
                       {removeIndices.includes(idx) && (
                         <div className="absolute inset-0 bg-red-500/30 flex items-center justify-center">
-                          <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <svg
+                            className="w-6 h-6 text-red-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
                         </div>
                       )}
                     </div>
@@ -509,15 +939,25 @@ function ActivityModal({ activity, onClose, onSave }: {
                 </div>
               </div>
             )}
-            {/* New file previews */}
+
+            {/* New previews */}
             {newFiles.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {newFiles.map((f, idx) => (
-                  <div key={idx} className="relative w-20 h-20 rounded-lg border-2 border-primary-300 overflow-hidden group">
+                  <div
+                    key={idx}
+                    className="relative w-20 h-20 rounded-lg border-2 border-primary-300 overflow-hidden group"
+                  >
                     {f.type.startsWith('video/') ? (
-                      <div className="w-full h-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-xl">🎬</div>
+                      <div className="w-full h-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-xl">
+                        🎬
+                      </div>
                     ) : (
-                      <img src={previewUrls[idx]} alt={f.name} className="w-full h-full object-cover" />
+                      <img
+                        src={previewUrls[idx]}
+                        alt={f.name}
+                        className="w-full h-full object-cover"
+                      />
                     )}
                     <button
                       onClick={() => removeNewFile(idx)}
@@ -530,17 +970,24 @@ function ActivityModal({ activity, onClose, onSave }: {
               </div>
             )}
           </div>
-          {/* Active toggle */}
+
+          {/* Active */}
           <label className="flex items-center gap-3 cursor-pointer">
             <input
-              type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)}
+              type="checkbox"
+              checked={isActive}
+              onChange={e => setIsActive(e.target.checked)}
               className="w-4 h-4 accent-primary-600"
             />
             <span className="text-sm text-gray-700 dark:text-slate-300">Hiển thị bài đăng</span>
           </label>
         </div>
+
         <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-4 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          >
             Hủy
           </button>
           <button

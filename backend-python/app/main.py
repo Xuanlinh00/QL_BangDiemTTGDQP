@@ -1,25 +1,26 @@
+"""FastAPI application entry point."""
+
+import logging
+from typing import Dict
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 
 from app.config import settings
-from app.routes import ocr, extract, reconcile
-from app.routes import documentai
-from app.database.mongodb import create_indexes, close_connection
-#from app.routes.documents import router as documents_router
+from app.database.mongodb import close_connection, create_indexes
+from app.routes import documentai, export, extract, ocr, ocr_advanced, reconcile
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# KHỞI TẠO app TRƯỚC
+# Initialize app
 app = FastAPI(
     title="TVU GDQP-AN Worker API",
     description="OCR and data extraction worker service",
-    version="1.0.0"
+    version="1.0.0",
 )
 
-# CÁC MIDDLEWARE
 # CORS middleware
 allowed_origins = [
     "http://localhost:5173",
@@ -36,27 +37,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# GẮN CÁC ROUTER (Đưa documents_router xuống đây)
-#app.include_router(documents_router, prefix="/documents", tags=["Documents"]) # Thêm prefix và tags cho chuẩn
+# Register routers
 app.include_router(ocr.router, prefix="/ocr", tags=["OCR"])
 app.include_router(extract.router, prefix="/extract", tags=["Extract"])
 app.include_router(reconcile.router, prefix="/reconcile", tags=["Reconcile"])
 app.include_router(documentai.router, prefix="/documentai", tags=["Document AI"])
+app.include_router(export.router, prefix="/export", tags=["Export"])
+app.include_router(ocr_advanced.router, prefix="/ocr-advanced", tags=["OCR Advanced"])
+
 
 @app.get("/health")
-async def health():
+async def health() -> Dict[str, str]:
+    """Health check endpoint."""
     return {"status": "ok"}
 
+
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
+    """Startup event handler."""
     logger.info("TVU GDQP-AN Worker API started")
     await create_indexes()
 
+
 @app.on_event("shutdown")
-async def shutdown_event():
+async def shutdown_event() -> None:
+    """Shutdown event handler."""
     await close_connection()
     logger.info("MongoDB connection closed")
 
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(app, host=settings.API_HOST, port=settings.API_PORT)

@@ -1,50 +1,56 @@
+"""OCR routes for document processing."""
+
 import io
 import logging
 import os
 import re
 import uuid
 from typing import Any, Dict, List, Optional
-import google.generativeai as genai
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
-from PIL import Image
-import pytesseract
+
 import cv2
+import google.generativeai as genai
 import numpy as np
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from PIL import Image
+from pydantic import BaseModel
+import pytesseract
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ── CẤU HÌNH GEMINI ────────────────────────────────
-GEMINI_KEY = settings.gemini_api_key or "AIzaSyCkzKzpctSnDqRtRo93O650OE-lRkuZZp4"
+# ── GEMINI CONFIGURATION ────────────────────────────────
+GEMINI_KEY = settings.GEMINI_API_KEY
 GEMINI_ENABLED = False
 model = None
 
-if GEMINI_KEY and GEMINI_KEY != "YOUR_GEMINI_API_KEY":
+if GEMINI_KEY and GEMINI_KEY.strip():
     try:
         genai.configure(api_key=GEMINI_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel("gemini-1.5-flash")
         GEMINI_ENABLED = True
-        logger.info(f"✅ Gemini AI configured successfully (key: {GEMINI_KEY[:20]}...)")
+        logger.info("✅ Gemini AI configured successfully")
     except Exception as e:
         logger.error(f"❌ Gemini AI configuration failed: {e}")
         GEMINI_ENABLED = False
 else:
     logger.warning("⚠️ Gemini API key not configured, will use Tesseract only")
 
-# ── CẤU HÌNH TESSERACT ──────────────────────────────
+# ── TESSERACT CONFIGURATION ──────────────────────────────
 if settings.TESSERACT_PATH and os.path.exists(settings.TESSERACT_PATH):
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_PATH
     logger.info(f"Tesseract configured: {settings.TESSERACT_PATH}")
 else:
     logger.warning(f"Tesseract not found at: {settings.TESSERACT_PATH}")
 
+
 # ─────────────────────────────────────────────────────
 # Pydantic models
 # ─────────────────────────────────────────────────────
 class OCRTextRequest(BaseModel):
+    """OCR text request model."""
+
     document_id: str
     raw_text: str
     document_type: str = "DSGD"
