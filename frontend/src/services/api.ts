@@ -4,9 +4,6 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 // Add token to requests
@@ -14,6 +11,10 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  // Set Content-Type to JSON if not already set (for non-FormData requests)
+  if (!config.headers['Content-Type'] && !(config.data instanceof FormData)) {
+    config.headers['Content-Type'] = 'application/json'
   }
   return config
 })
@@ -128,13 +129,17 @@ export const activitiesApi = {
     Object.entries(data).forEach(([k, v]) => {
       if (v !== undefined && v !== null) form.append(k, String(v))
     })
-    if (files) files.forEach(f => form.append('files', f))
+    if (files && files.length > 0) files.forEach(f => form.append('files', f))
     if (removeMedia && removeMedia.length > 0) form.append('removeMedia', removeMedia.join(','))
     return api.put(`/activities/${id}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
   },
   delete: (id: string) => api.delete(`/activities/${id}`),
   seed: () => api.post('/activities/seed'),
-  getMediaUrl: (activityId: string, mediaIndex: number) => `${API_URL}/activities/${activityId}/media/${mediaIndex}`,
+  getMediaUrl: (activityId: string, mediaIndex: number) => {
+    // Add timestamp for cache busting - generate fresh each time
+    const timestamp = new Date().getTime()
+    return `${API_URL}/activities/${activityId}/media/${mediaIndex}?t=${timestamp}`
+  },
 }
 
 export default api

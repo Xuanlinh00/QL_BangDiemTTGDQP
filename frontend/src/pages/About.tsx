@@ -66,6 +66,7 @@ export default function About() {
     { id: '3', image: null },
   ])
   const [currentBannerSlide, setCurrentBannerSlide] = useState(0)
+  const [bannerActivity, setBannerActivity] = useState<Activity | null>(null)
 
   // State quản lý việc xem ảnh/video toàn màn hình
   const [mediaModal, setMediaModal] = useState<{
@@ -75,10 +76,38 @@ export default function About() {
     currentIndex: number
   } | null>(null)
 
+  // State quản lý chỉnh sửa phần giới thiệu
+  const [editingIntroduction, setEditingIntroduction] = useState(false)
+  const [introductionData, setIntroductionData] = useState({
+    title: 'Giới thiệu về Trung tâm Giáo dục Quốc phòng và An ninh',
+    description: 'Trung tâm Giáo dục Quốc phòng và An ninh (GDQP-AN) Đại học Trà Vinh là đơn vị chuyên trách trong công tác giáo dục quốc phòng, an ninh cho sinh viên các trường đại học, cao đẳng trên địa bàn tỉnh Trà Vinh.',
+    content: 'Thành lập vào năm 2008 với tên gọi Trung tâm Giáo dục Quốc phòng – An ninh sinh viên. Tại Quyết định số 1830/QĐ-UBND, ngày 03/10/2017 của UBND tỉnh Trà Vinh, trung tâm đổi tên thành Trung tâm Giáo dục Quốc phòng và An ninh (GDQP – AN), trực thuộc Trường Đại học Trà Vinh (Trung tâm). Từ ngày thành lập đến nay Trung tâm luôn hoàn thành nhiệm vụ được giao.',
+    stats: [
+      { label: 'Sinh viên được đào tạo', value: '100%' },
+      { label: 'Năm kinh nghiệm', value: '15+' },
+      { label: 'Sinh viên đã tốt nghiệp', value: '10K+' }
+    ]
+  })
+
   const loadActivities = useCallback(async () => {
     try {
       const res = await activitiesApi.list()
       setActivities(res.data.data || [])
+      
+      // Load banner activity
+      const banner = res.data.data?.find((a: Activity) => a.category === 'banner')
+      if (banner) {
+        setBannerActivity(banner)
+        const slides = banner.media.map((_m: MediaItem, idx: number) => ({
+          id: String(idx + 1),
+          image: activitiesApi.getMediaUrl(banner._id, idx)
+        }))
+        setBannerSlides(slides.length > 0 ? slides : [
+          { id: '1', image: null },
+          { id: '2', image: null },
+          { id: '3', image: null },
+        ])
+      }
     } catch {
       // ignore
     }
@@ -130,8 +159,8 @@ export default function About() {
     [editingActivity]
   )
 
-  const activeActivities = activities.filter(a => a.isActive)
-  const inactiveActivities = activities.filter(a => !a.isActive)
+  const activeActivities = activities.filter(a => a.isActive && a.category !== 'banner')
+  const inactiveActivities = activities.filter(a => !a.isActive && a.category !== 'banner')
   const filtered =
     filterCategory === 'all'
       ? activeActivities
@@ -141,6 +170,16 @@ export default function About() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto -mt-2">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-2">
+          Quản Lý Về Chúng Tôi
+        </h1>
+        <p className="text-lg text-gray-600 dark:text-slate-400">
+          Chỉnh sửa banner, giới thiệu và hoạt động của trung tâm
+        </p>
+      </div>
+
      {/* State kiểm tra quyền admin - bạn thay bằng logic thật của app */}
 
 {/* ═══ BANNER CAROUSEL (CẢI TIẾN: AUTO-ROTATE + SMOOTH TRANSITION + ĐẸP HƠN) ═══ */}
@@ -168,7 +207,7 @@ export default function About() {
           <img
             src={slide.image}
             alt={`Banner slide ${idx + 1}`}
-            className="w-full h-full object-cover brightness-90"
+            className="w-full h-full object-cover brightness-95"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
@@ -219,28 +258,96 @@ export default function About() {
 
   {/* Banner content overlay */}
   <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 md:px-12 bg-gradient-to-t from-black/60 via-black/30 to-transparent">
-    <div className="inline-block mb-6 px-6 py-2 bg-white/15 backdrop-blur-lg rounded-full border border-white/20 shadow-lg">
-      <span className="text-sm md:text-base font-semibold text-white uppercase tracking-widest">Hoạt động & Tin tức</span>
-    </div>
     
-    <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 md:mb-6 leading-tight drop-shadow-2xl">
-      Khám phá các hoạt động nổi bật
-    </h1>
+    {/* Edit buttons - chỉ hiển thị khi có hình */}
+    {bannerSlides[currentBannerSlide]?.image && (
+      <div className="absolute top-4 right-4 flex gap-2 z-30">
+        <button
+          onClick={async () => {
+            if (!bannerActivity) return
+            if (!window.confirm('Bạn có chắc muốn xóa hình ảnh này?')) return
+            try {
+              console.log('Deleting media at index:', currentBannerSlide);
+              const res = await activitiesApi.update(bannerActivity._id, {}, [], [currentBannerSlide])
+              console.log('Delete response:', res.data.data);
+              setBannerActivity(res.data.data)
+              
+              // Rebuild slides from updated media
+              if (res.data.data.media.length === 0) {
+                // If no media left, reset to empty slides
+                setBannerSlides([
+                  { id: '1', image: null },
+                  { id: '2', image: null },
+                  { id: '3', image: null },
+                ])
+                setCurrentBannerSlide(0)
+              } else {
+                const newSlides = res.data.data.media.map((m: any, idx: number) => ({
+                  id: String(idx + 1),
+                  image: activitiesApi.getMediaUrl(res.data.data._id, idx)
+                }))
+                console.log('New slides after delete:', newSlides);
+                setBannerSlides(newSlides)
+                // Reset current slide if index is out of bounds
+                if (currentBannerSlide >= newSlides.length) {
+                  console.log('Resetting slide from', currentBannerSlide, 'to', newSlides.length - 1);
+                  setCurrentBannerSlide(Math.max(0, newSlides.length - 1))
+                }
+              }
+            } catch (err: any) {
+              console.error('Delete failed:', err);
+              alert('Xóa hình ảnh thất bại: ' + (err.response?.data?.error?.message || err.message))
+            }
+          }}
+          className="p-2 rounded-lg bg-red-500/80 hover:bg-red-600 text-white transition-all"
+          title="Xóa hình ảnh này"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+        <label className="p-2 rounded-lg bg-blue-500/80 hover:bg-blue-600 text-white transition-all cursor-pointer" title="Thay thế hình ảnh">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (file && bannerActivity) {
+                try {
+                  console.log('Replacing media at index:', currentBannerSlide);
+                  const removeIndices = [currentBannerSlide];
+                  const res = await activitiesApi.update(bannerActivity._id, {}, [file], removeIndices)
+                  console.log('Replace response:', res.data.data);
+                  setBannerActivity(res.data.data)
+                  const newSlides = res.data.data.media.map((m: any, idx: number) => ({
+                    id: String(idx + 1),
+                    image: activitiesApi.getMediaUrl(res.data.data._id, idx)
+                  }))
+                  console.log('New slides after replace:', newSlides);
+                  setBannerSlides(newSlides)
+                  // Keep current slide index or adjust if needed
+                  if (currentBannerSlide >= newSlides.length) {
+                    setCurrentBannerSlide(Math.max(0, newSlides.length - 1))
+                  }
+                } catch (err: any) {
+                  console.error('Replace failed:', err)
+                  alert('Thay thế hình ảnh thất bại: ' + (err.response?.data?.error?.message || err.message))
+                }
+              }
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+        </label>
+      </div>
+    )}
     
-    <p className="text-base md:text-xl text-white/90 max-w-3xl mx-auto leading-relaxed drop-shadow-lg">
-      Cập nhật những tin tức mới nhất, các hoạt động đào tạo, sự kiện và những thành tựu đáng tự hào của tổ chức
-    </p>
-
-    <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-white/90 text-sm md:text-base">
-      <div className="flex items-center gap-3 bg-black/30 px-4 py-2 rounded-full backdrop-blur-sm">
-        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10.5 1.5H5.75A2.25 2.25 0 003.5 3.75v10.5a2.25 2.25 0 002.25 2.25h8.5a2.25 2.25 0 002.25-2.25V6.5m-11-3v3m6-3v3m-6 6h6" /></svg>
-        <span>{activeActivities.length} bài đăng</span>
-      </div>
-      <div className="flex items-center gap-3 bg-black/30 px-4 py-2 rounded-full backdrop-blur-sm">
-        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.3A4.5 4.5 0 1113.5 13H11V9.413l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13H5.5z" clipRule="evenodd" /></svg>
-        <span>{usedCategories.length} danh mục</span>
-      </div>
-    </div>
+    <h5 className="text-2xl md:text-4xl lg:text-4xl font-extrabold text-white mb-4 md:mb-6 leading-tight drop-shadow-2xl">
+      Trung tâm Giáo dục Quốc phòng và An ninh<br /> Đại học Trà Vinh
+    </h5>
 
     {/* Upload button */}
     <div className="mt-10">
@@ -250,19 +357,51 @@ export default function About() {
         <input
           type="file"
           accept="image/*"
-          onChange={(e) => {
+          onChange={async (e) => {
             const file = e.target.files?.[0];
             if (file) {
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                const data = ev.target?.result as string;
-                setBannerSlides(prev => {
-                  const updated = [...prev];
-                  updated[currentBannerSlide] = { ...updated[currentBannerSlide], image: data };
-                  return updated;
-                });
-              };
-              reader.readAsDataURL(file);
+              try {
+                console.log('Uploading file:', file.name, file.size, file.type);
+                const token = localStorage.getItem('token');
+                console.log('Token in localStorage:', token ? 'present' : 'missing');
+                
+                // Create or update banner activity
+                if (!bannerActivity) {
+                  console.log('Creating new banner activity');
+                  const res = await activitiesApi.create({
+                    title: 'Banner Slides',
+                    description: 'Banner slides for homepage',
+                    category: 'banner',
+                    icon: '🖼️',
+                    isActive: true,
+                    order: 0,
+                  }, [file])
+                  console.log('Banner created:', res.data.data);
+                  setBannerActivity(res.data.data)
+                  const newSlides = res.data.data.media.map((m: any, idx: number) => ({
+                    id: String(idx + 1),
+                    image: activitiesApi.getMediaUrl(res.data.data._id, idx)
+                  }))
+                  setBannerSlides(newSlides)
+                  setCurrentBannerSlide(0)
+                } else {
+                  console.log('Updating existing banner activity:', bannerActivity._id);
+                  // Add to existing banner activity
+                  const res = await activitiesApi.update(bannerActivity._id, {}, [file])
+                  console.log('Banner updated:', res.data.data);
+                  setBannerActivity(res.data.data)
+                  const newSlides = res.data.data.media.map((m: any, idx: number) => ({
+                    id: String(idx + 1),
+                    image: activitiesApi.getMediaUrl(res.data.data._id, idx)
+                  }))
+                  setBannerSlides(newSlides)
+                  // Set to the newly added slide (last one)
+                  setCurrentBannerSlide(newSlides.length - 1)
+                }
+              } catch (err: any) {
+                console.error('Upload failed:', err);
+                alert('Upload failed: ' + (err.response?.data?.error?.message || err.message));
+              }
             }
             e.target.value = '';
           }}
@@ -272,6 +411,50 @@ export default function About() {
     </div>
   </div>
 </div>
+
+      {/* Mục giới thiệu trung tâm */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700 rounded-2xl p-8 md:p-12 border border-blue-200 dark:border-slate-600">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="flex-shrink-0">
+              <div className="flex items-center justify-center h-16 w-16 rounded-xl bg-blue-600 text-white">
+                <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5.581m0 0H9m5.581 0a2 2 0 100-4 2 2 0 000 4m0-7a2 2 0 100-4 2 2 0 000 4m-6 0a2 2 0 100-4 2 2 0 000 4m0 7h.581" />
+                </svg>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                {introductionData.title}
+              </h2>
+              <p className="text-lg text-gray-700 dark:text-slate-300 mb-4 leading-relaxed">
+                {introductionData.description}
+              </p>
+              <p className="text-lg text-gray-700 dark:text-slate-300 mb-4 leading-relaxed">
+                {introductionData.content}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                {introductionData.stats.map((stat, idx) => (
+                  <div key={idx} className="bg-white dark:bg-slate-700 rounded-lg p-4">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stat.value}</div>
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setEditingIntroduction(true)}
+              className="flex-shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 transition-colors"
+              title="Chỉnh sửa phần giới thiệu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* ═══ ACTIVITIES / POSTS SECTION ═══ */}
       <div>
         <div className="flex items-center justify-between mb-5">
@@ -435,10 +618,10 @@ export default function About() {
                         : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
                     }`}
                   >
-                    {activity.media.map((m, idx) => {
+                    {activity.media.map((m: MediaItem, idx: number) => {
                       const mediaUrl = activitiesApi.getMediaUrl(activity._id, idx)
                       const isVideo = m.mimeType.startsWith('video/')
-                      const allMedia = activity.media.map((media, i) => ({
+                      const allMedia = activity.media.map((media: MediaItem, i: number) => ({
                         type: (media.mimeType.startsWith('video/') ? 'video' : 'image') as 'image' | 'video',
                         url: activitiesApi.getMediaUrl(activity._id, i),
                       }))
@@ -683,6 +866,100 @@ export default function About() {
         </div>
       )}
 
+      {/* Footer */}
+      <footer className="bg-gray-900 dark:bg-black text-white py-12 md:py-16 rounded-t-3xl mt-16">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            {/* About */}
+            <div>
+              <h3 className="text-lg font-bold mb-4">Trung tâm GDQP-AN</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Đơn vị chuyên trách giáo dục quốc phòng và an ninh cho sinh viên các trường đại học, cao đẳng trên địa bàn tỉnh Trà Vinh.
+              </p>
+            </div>
+
+            {/* Quick Links */}
+            <div>
+              <h3 className="text-lg font-bold mb-4">Liên kết nhanh</h3>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Trang chủ</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Về chúng tôi</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Hoạt động</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Liên hệ</a></li>
+              </ul>
+            </div>
+
+            {/* Categories */}
+            <div>
+              <h3 className="text-lg font-bold mb-4">Danh mục</h3>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Giáo dục</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Huấn luyện</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Thể thao</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Tin tức</a></li>
+              </ul>
+            </div>
+
+            {/* Contact */}
+            <div>
+              <h3 className="text-lg font-bold mb-4">Liên hệ</h3>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li className="flex items-start gap-2">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span>info@tvu.edu.vn</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  <span>(0292) 3.848.888</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Trà Vinh, Việt Nam</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800 pt-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <p className="text-gray-400 text-sm">
+                © 2024 Trung tâm Giáo dục Quốc phòng và An ninh. Tất cả quyền được bảo lưu.
+              </p>
+              <div className="flex gap-4">
+                <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+                <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23 3a10.9 10.9 0 01-3.14 1.53 4.48 4.48 0 00-7.86 3v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2s9 5 20 5a9.5 9.5 0 00-9-5.5c4.75 2.25 7-7 7-7s1.1 5.2-5.2 8.3A15.7 15.7 0 010 22"/></svg>
+                </a>
+                <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="none" stroke="currentColor" strokeWidth="2"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {/* Modal chỉnh sửa giới thiệu */}
+      {editingIntroduction && (
+        <IntroductionModal
+          data={introductionData}
+          onClose={() => setEditingIntroduction(false)}
+          onSave={(newData) => {
+            setIntroductionData(newData)
+            setEditingIntroduction(false)
+          }}
+        />
+      )}
+
       {/* Modal thêm/sửa activity */}
       {showModal && (
         <ActivityModal
@@ -694,6 +971,138 @@ export default function About() {
           onSave={handleSave}
         />
       )}
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────
+   Introduction Edit Modal
+────────────────────────────────────────── */
+
+function IntroductionModal({
+  data,
+  onClose,
+  onSave,
+}: {
+  data: {
+    title: string
+    description: string
+    content: string
+    stats: Array<{ label: string; value: string }>
+  }
+  onClose: () => void
+  onSave: (data: any) => void
+}) {
+  const [title, setTitle] = useState(data.title)
+  const [description, setDescription] = useState(data.description)
+  const [content, setContent] = useState(data.content)
+  const [stats, setStats] = useState(data.stats)
+
+  const handleStatChange = (idx: number, field: 'label' | 'value', value: string) => {
+    const newStats = [...stats]
+    newStats[idx] = { ...newStats[idx], [field]: value }
+    setStats(newStats)
+  }
+
+  const handleSubmit = () => {
+    onSave({ title, description, content, stats })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 border border-gray-200 dark:border-slate-700 max-h-[90vh] flex flex-col">
+        <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between shrink-0">
+          <h2 className="text-lg font-bold text-gray-800 dark:text-white">
+            Chỉnh sửa phần giới thiệu
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white text-2xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Title */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Tiêu đề
+            </label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Mô tả ngắn
+            </label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+            />
+          </div>
+
+          {/* Content */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+              Nội dung chi tiết
+            </label>
+            <textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+            />
+          </div>
+
+          {/* Stats */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">
+              Thống kê
+            </label>
+            <div className="space-y-3">
+              {stats.map((stat, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <input
+                    value={stat.value}
+                    onChange={e => handleStatChange(idx, 'value', e.target.value)}
+                    placeholder="Giá trị (VD: 100%)"
+                    className="w-24 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
+                  />
+                  <input
+                    value={stat.label}
+                    onChange={e => handleStatChange(idx, 'label', e.target.value)}
+                    placeholder="Nhãn"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-4 flex justify-end gap-3 shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
+          >
+            Lưu thay đổi
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -896,7 +1305,7 @@ function ActivityModal({
                   Media hiện có (nhấn để đánh dấu xóa):
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {existingMedia.map((m, idx) => (
+                  {existingMedia.map((m: MediaItem, idx: number) => (
                     <div
                       key={m._id || idx}
                       onClick={() => toggleRemoveExisting(idx)}
