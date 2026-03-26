@@ -1,6 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { activitiesApi } from '../services/api'
 
+// Add scrollbar-hide style
+const scrollbarHideStyle = `
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+`
+
 interface MediaItem {
   _id: string
   fileName: string
@@ -67,10 +78,11 @@ export default function PublicAbout() {
 
   // Lightbox state
   const [mediaModal, setMediaModal] = useState<{
-    type: 'image' | 'video'
+    type: 'image' | 'video' | 'detail'
     url: string
     allMedia: Array<{ type: 'image' | 'video'; url: string }>
     currentIndex: number
+    activity?: Activity
   } | null>(null)
 
   const loadActivities = useCallback(async () => {
@@ -107,7 +119,7 @@ export default function PublicAbout() {
     return () => clearInterval(interval)
   }, [bannerSlides.length])
 
-  const activeActivities = activities.filter(a => a.isActive && a.category !== 'banner')
+  const activeActivities = activities.filter(a => a.isActive && a.category !== 'banner' && a.category !== 'introduction')
   const filtered =
     filterCategory === 'all'
       ? activeActivities
@@ -116,15 +128,13 @@ export default function PublicAbout() {
   const usedCategories = [...new Set(activeActivities.map(a => a.category))]
 
   return (
-    <div className="space-y-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-5 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+      <style>{scrollbarHideStyle}</style>
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-2">
-          Về Chúng Tôi
+      <div className="mb-2">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+          Trung tâm Giáo dục Quốc phòng và An ninh Đại học Trà Vinh
         </h1>
-        <p className="text-lg text-gray-600 dark:text-slate-400">
-          Tìm hiểu thêm về Trung tâm Giáo dục Quốc phòng và An ninh
-        </p>
       </div>
 
       {/* Banner Carousel - sạch sẽ, không nút chỉnh sửa */}
@@ -224,20 +234,65 @@ export default function PublicAbout() {
               Thành lập vào năm 2008 với tên gọi Trung tâm Giáo dục Quốc phòng – An ninh sinh viên. Tại Quyết định số 1830/QĐ-UBND, ngày 03/10/2017 của UBND tỉnh Trà Vinh, trung tâm đổi tên thành Trung tâm Giáo dục Quốc phòng và An ninh (GDQP – AN), trực thuộc Trường Đại học Trà Vinh (Trung tâm). Từ ngày thành lập đến nay Trung tâm luôn hoàn thành nhiệm vụ được giao.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="bg-white dark:bg-slate-700 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">100%</div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Sinh viên được đào tạo</p>
-                </div>
-                <div className="bg-white dark:bg-slate-700 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">15+</div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Năm kinh nghiệm</p>
-                </div>
-                <div className="bg-white dark:bg-slate-700 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">10K+</div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Sinh viên đã tốt nghiệp</p>
-                </div>
-              </div>
+              {/* Display introduction media */}
+              {(() => {
+                const introActivity = activities.find(a => a.category === 'introduction')
+                if (!introActivity || !introActivity.media?.length) return null
+                return (
+                  <div className="mt-6 space-y-4">
+                    <div className="space-y-4">
+                      {introActivity.media.map((m, idx) => {
+                        const url = activitiesApi.getMediaUrl(introActivity._id, idx)
+                        const isVideo = m.mimeType.startsWith('video/')
+                        const allMedia = introActivity.media.map((media, i) => ({
+                          type: media.mimeType.startsWith('video/') ? 'video' : 'image',
+                          url: activitiesApi.getMediaUrl(introActivity._id, i),
+                        })) as Array<{ type: 'image' | 'video'; url: string }>
+
+                        return (
+                          <div
+                            key={idx}
+                            className="relative rounded-lg overflow-hidden border border-gray-300 dark:border-slate-600 bg-gray-100 dark:bg-slate-900 group hover:shadow-lg transition-shadow w-full"
+                          >
+                            {isVideo ? (
+                              <video 
+                                src={url} 
+                                className="w-full h-auto max-h-96 object-contain" 
+                                controls
+                                controlsList="nodownload"
+                              />
+                            ) : (
+                              <img 
+                                src={url} 
+                                alt={m.fileName} 
+                                className="w-full h-auto max-h-96 object-contain cursor-pointer"
+                                onClick={() => setMediaModal({ type: 'image', url, allMedia, currentIndex: idx })}
+                              />
+                            )}
+                            {isVideo && (
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center pointer-events-none">
+                                <svg className="w-16 h-16 text-white opacity-70 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            )}
+                            {!isVideo && (
+                              <div 
+                                className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center cursor-pointer"
+                                onClick={() => setMediaModal({ type: 'image', url, allMedia, currentIndex: idx })}
+                              >
+                                <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -280,24 +335,23 @@ export default function PublicAbout() {
           ))}
         </div>
 
-        {/* Danh sách bài */}
+        {/* Danh sách bài - Horizontal scroll */}
         {filtered.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((activity, i) => {
-              const isExpanded = expandedPost === activity._id
-              const hasMedia = activity.media?.length > 0
+          <div className="relative">
+            <div className="overflow-x-auto scrollbar-hide">
+              <div className="flex gap-6 pb-4 min-w-min">
+                {filtered.map((activity, i) => {
+                  const hasMedia = activity.media?.length > 0
 
-              return (
-                <div
-                  key={activity._id}
-                  className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-md overflow-hidden hover:shadow-xl transition-all duration-300"
-                  style={{ animationDelay: `${i * 80}ms` }}
-                >
-                  <div className="p-6">
-                    <div className="flex items-start gap-4">
-                      <span className="text-4xl flex-shrink-0">{activity.icon}</span>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  return (
+                    <div
+                      key={activity._id}
+                      className="flex-shrink-0 w-80 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer"
+                      onClick={() => setMediaModal({ type: 'detail', url: '', allMedia: [], currentIndex: 0, activity })}
+                      style={{ animationDelay: `${i * 80}ms` }}
+                    >
+                      <div className="p-6">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">
                           {activity.title}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -305,7 +359,7 @@ export default function PublicAbout() {
                             {getCategoryLabel(activity.category)}
                           </span>
                           {activity.createdAt && (
-                            <span className="text-sm text-gray-500 dark:text-slate-400">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">
                               {new Date(activity.createdAt).toLocaleDateString('vi-VN', {
                                 day: '2-digit',
                                 month: '2-digit',
@@ -314,38 +368,132 @@ export default function PublicAbout() {
                             </span>
                           )}
                         </div>
+
+                        <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed mb-4 line-clamp-3">
+                          {activity.description}
+                        </p>
                       </div>
-                    </div>
 
-                    <p className="text-gray-600 dark:text-slate-300 leading-relaxed mb-4">
-                      {activity.description}
-                    </p>
+                      {hasMedia && (
+                        <div className="px-6 pb-6">
+                          <div className="relative rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 aspect-video bg-gray-100 dark:bg-slate-900">
+                            {(() => {
+                              const m = activity.media[0]
+                              const url = activitiesApi.getMediaUrl(activity._id, 0)
+                              const isVideo = m.mimeType.startsWith('video/')
 
-                    {activity.content && (
-                      <div>
-                        {isExpanded && (
-                          <div className="mt-4 text-gray-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap border-t border-gray-200 dark:border-slate-700 pt-4">
-                            {activity.content}
+                              return (
+                                <>
+                                  {isVideo ? (
+                                    <video src={url} className="w-full h-full object-cover" muted loop playsInline />
+                                  ) : (
+                                    <img src={url} alt={m.fileName} className="w-full h-full object-cover" />
+                                  )}
+                                </>
+                              )
+                            })()}
                           </div>
-                        )}
-                        <button
-                          onClick={() => setExpandedPost(isExpanded ? null : activity._id)}
-                          className="mt-3 text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 font-medium text-sm transition"
-                        >
-                          {isExpanded ? 'Thu gọn ↑' : 'Xem thêm ↓'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
 
-                  {hasMedia && (
-                    <div className={`px-6 pb-6 grid gap-4 ${activity.media.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-                      {activity.media.map((m, idx) => {
-                        const url = activitiesApi.getMediaUrl(activity._id, idx)
+            {/* Navigation arrows */}
+            {filtered.length > 3 && (
+              <>
+                <button
+                  onClick={() => {
+                    const container = document.querySelector('.overflow-x-auto')
+                    if (container) container.scrollLeft -= 400
+                  }}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-6 z-10 p-3 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-lg transition hover:scale-110"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    const container = document.querySelector('.overflow-x-auto')
+                    if (container) container.scrollLeft += 400
+                  }}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-6 z-10 p-3 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-lg transition hover:scale-110"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-16 text-gray-500 dark:text-slate-400">
+            <span className="text-6xl block mb-4">📭</span>
+            <p className="text-lg">
+              Chưa có bài đăng nào{filterCategory !== 'all' ? ` trong danh mục "${getCategoryLabel(filterCategory)}"` : ''}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox */}
+      {mediaModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
+          onClick={() => setMediaModal(null)}
+        >
+          <div className="relative max-w-6xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <button
+              className="sticky top-0 right-0 float-right p-2 text-white text-4xl hover:text-gray-300 transition bg-black/50 rounded-lg"
+              onClick={() => setMediaModal(null)}
+            >
+              ×
+            </button>
+
+            {mediaModal.type === 'detail' && mediaModal.activity ? (
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 md:p-12">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                  {mediaModal.activity.title}
+                </h2>
+                
+                <div className="flex flex-wrap items-center gap-3 mb-6">
+                  <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(mediaModal.activity.category)}`}>
+                    {getCategoryLabel(mediaModal.activity.category)}
+                  </span>
+                  {mediaModal.activity.createdAt && (
+                    <span className="text-gray-500 dark:text-slate-400">
+                      {new Date(mediaModal.activity.createdAt).toLocaleDateString('vi-VN', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-lg text-gray-700 dark:text-slate-300 mb-6 leading-relaxed">
+                  {mediaModal.activity.description}
+                </p>
+
+                {mediaModal.activity.content && (
+                  <div className="text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap mb-8 border-t border-gray-200 dark:border-slate-700 pt-6">
+                    {mediaModal.activity.content}
+                  </div>
+                )}
+
+                {mediaModal.activity.media?.length > 0 && (
+                  <div className="mt-8">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Hình ảnh & Video</h3>
+                    <div className={`grid gap-4 ${mediaModal.activity.media.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+                      {mediaModal.activity.media.map((m, idx) => {
+                        const url = activitiesApi.getMediaUrl(mediaModal.activity!._id, idx)
                         const isVideo = m.mimeType.startsWith('video/')
-                        const allMedia = activity.media.map((media, i) => ({
+                        const allMedia = mediaModal.activity!.media.map((media, i) => ({
                           type: media.mimeType.startsWith('video/') ? 'video' : 'image',
-                          url: activitiesApi.getMediaUrl(activity._id, i),
+                          url: activitiesApi.getMediaUrl(mediaModal.activity!._id, i),
                         })) as Array<{ type: 'image' | 'video'; url: string }>
 
                         return (
@@ -368,95 +516,73 @@ export default function PublicAbout() {
                         )
                       })}
                     </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-16 text-gray-500 dark:text-slate-400">
-            <span className="text-6xl block mb-4">📭</span>
-            <p className="text-lg">
-              Chưa có bài đăng nào{filterCategory !== 'all' ? ` trong danh mục "${getCategoryLabel(filterCategory)}"` : ''}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Lightbox */}
-      {mediaModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
-          onClick={() => setMediaModal(null)}
-        >
-          <div className="relative max-w-6xl w-full" onClick={e => e.stopPropagation()}>
-            <button
-              className="absolute -top-12 right-4 text-white text-5xl hover:text-gray-300 transition"
-              onClick={() => setMediaModal(null)}
-            >
-              ×
-            </button>
-
-            {mediaModal.type === 'image' ? (
-              <img
-                src={mediaModal.url}
-                alt="Preview"
-                className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain mx-auto"
-              />
-            ) : (
-              <video
-                src={mediaModal.url}
-                controls
-                autoPlay
-                className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl bg-black mx-auto"
-              />
-            )}
-
-            {mediaModal.allMedia.length > 1 && (
-              <div className="mt-6 flex justify-center gap-4">
-                <button
-                  onClick={() => {
-                    const newIdx = mediaModal.currentIndex === 0 ? mediaModal.allMedia.length - 1 : mediaModal.currentIndex - 1
-                    const newMedia = mediaModal.allMedia[newIdx]
-                    setMediaModal({ ...mediaModal, currentIndex: newIdx, type: newMedia.type as 'image' | 'video', url: newMedia.url })
-                  }}
-                  className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
-                >
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-
-                <div className="px-6 py-3 bg-white/10 rounded-full text-white">
-                  {mediaModal.currentIndex + 1} / {mediaModal.allMedia.length}
-                </div>
-
-                <button
-                  onClick={() => {
-                    const newIdx = (mediaModal.currentIndex + 1) % mediaModal.allMedia.length
-                    const newMedia = mediaModal.allMedia[newIdx]
-                    setMediaModal({ ...mediaModal, currentIndex: newIdx, type: newMedia.type as 'image' | 'video', url: newMedia.url })
-                  }}
-                  className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
-                >
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+                  </div>
+                )}
               </div>
+            ) : (
+              <>
+                {mediaModal.type === 'image' ? (
+                  <img
+                    src={mediaModal.url}
+                    alt="Preview"
+                    className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain mx-auto"
+                  />
+                ) : (
+                  <video
+                    src={mediaModal.url}
+                    controls
+                    autoPlay
+                    className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl bg-black mx-auto"
+                  />
+                )}
+
+                {mediaModal.allMedia.length > 1 && (
+                  <div className="mt-6 flex justify-center gap-4">
+                    <button
+                      onClick={() => {
+                        const newIdx = mediaModal.currentIndex === 0 ? mediaModal.allMedia.length - 1 : mediaModal.currentIndex - 1
+                        const newMedia = mediaModal.allMedia[newIdx]
+                        setMediaModal({ ...mediaModal, currentIndex: newIdx, type: newMedia.type as 'image' | 'video', url: newMedia.url })
+                      }}
+                      className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+                    >
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+
+                    <div className="px-6 py-3 bg-white/10 rounded-full text-white">
+                      {mediaModal.currentIndex + 1} / {mediaModal.allMedia.length}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const newIdx = (mediaModal.currentIndex + 1) % mediaModal.allMedia.length
+                        const newMedia = mediaModal.allMedia[newIdx]
+                        setMediaModal({ ...mediaModal, currentIndex: newIdx, type: newMedia.type as 'image' | 'video', url: newMedia.url })
+                      }}
+                      className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+                    >
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       )}
 
     {/* Footer */}
-    <footer className="bg-gray-900 dark:bg-black text-white py-12 md:py-16 rounded-t-3xl mt-16">
+    <footer className="bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-900 dark:to-black text-white py-12 md:py-16 rounded-t-3xl mt-16">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* About */}
           <div>
             <h3 className="text-lg font-bold mb-4">Trung tâm GDQP-AN</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="text-slate-300 text-sm leading-relaxed">
               Đơn vị chuyên trách giáo dục quốc phòng và an ninh cho sinh viên các trường đại học, cao đẳng trên địa bàn tỉnh Trà Vinh.
             </p>
           </div>
@@ -465,10 +591,10 @@ export default function PublicAbout() {
           <div>
             <h3 className="text-lg font-bold mb-4">Liên kết nhanh</h3>
             <ul className="space-y-2 text-sm">
-              <li><a href="/" className="text-gray-400 hover:text-white transition-colors">Trang chủ</a></li>
-              <li><a href="/about" className="text-gray-400 hover:text-white transition-colors">Về chúng tôi</a></li>
-              <li><a href="/about" className="text-gray-400 hover:text-white transition-colors">Hoạt động</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Liên hệ</a></li>
+              <li><a href="/" className="text-slate-300 hover:text-white transition-colors">Trang chủ</a></li>
+              <li><a href="/about" className="text-slate-300 hover:text-white transition-colors">Về chúng tôi</a></li>
+              <li><a href="/about" className="text-slate-300 hover:text-white transition-colors">Hoạt động</a></li>
+              <li><a href="#" className="text-slate-300 hover:text-white transition-colors">Liên hệ</a></li>
             </ul>
           </div>
 
@@ -476,17 +602,17 @@ export default function PublicAbout() {
           <div>
             <h3 className="text-lg font-bold mb-4">Danh mục</h3>
             <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Giáo dục</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Huấn luyện</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Thể thao</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Tin tức</a></li>
+              <li><a href="#" className="text-slate-300 hover:text-white transition-colors">Giáo dục</a></li>
+              <li><a href="#" className="text-slate-300 hover:text-white transition-colors">Huấn luyện</a></li>
+              <li><a href="#" className="text-slate-300 hover:text-white transition-colors">Thể thao</a></li>
+              <li><a href="#" className="text-slate-300 hover:text-white transition-colors">Tin tức</a></li>
             </ul>
           </div>
 
           {/* Contact */}
           <div>
             <h3 className="text-lg font-bold mb-4">Liên hệ</h3>
-            <ul className="space-y-2 text-sm text-gray-400">
+            <ul className="space-y-2 text-sm text-slate-300">
               <li className="flex items-start gap-2">
                 <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -510,23 +636,23 @@ export default function PublicAbout() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 pt-8">
+        <div className="border-t border-slate-600 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-400 text-sm">
+            <p className="text-slate-300 text-sm">
               © 2024 Trung tâm Giáo dục Quốc phòng và An ninh. Tất cả quyền được bảo lưu.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-300 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <circle cx={12} cy={12} r={12} />
                 </svg>
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-300 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <circle cx={12} cy={12} r={12} />
                 </svg>
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <a href="#" className="text-slate-300 hover:text-white transition-colors">
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <circle cx={12} cy={12} r={12} />
                 </svg>
