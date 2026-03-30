@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: tvu-frontend
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: VITE_API_URL
+        value: https://tvu-backend-node.onrender.com/api
+      - key: VITE_APP_NAME
+        value: TVU GDQP-AN Admin Portal
+      - key: VITE_ENABLE_EXCEL_EXPORT
+        value: "true"
+      - key: VITE_ENABLE_OCR
+        value: "true"
+      - key: VITE_DEBUG
+        value: "false"
+    staticPublishPath: dist

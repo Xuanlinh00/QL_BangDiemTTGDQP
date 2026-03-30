@@ -27,8 +27,9 @@ export default function TVUExtract() {
   useEffect(() => {
     const checkAPI = async () => {
       try {
+        // Try to connect to Python API (local development only)
         const PYTHON_API = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8001'
-        const response = await fetch(`${PYTHON_API}/api/tvu/health`)
+        const response = await fetch(`${PYTHON_API}/api/tvu/health`, { signal: AbortSignal.timeout(3000) })
         if (response.ok) {
           setApiStatus('online')
         } else {
