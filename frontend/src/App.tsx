@@ -12,7 +12,7 @@ import Decisions from './pages/Decisions'
 import Settings from './pages/Settings'
 import About from './pages/About'
 import PublicAbout from './pages/PublicAbout'
-import CertificateIssuance from './pages/CertificateIssuance'
+import CertificateIssuance from './pages/Certificates'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,7 +51,7 @@ export default function App() {
             >
               <Route index element={<Dashboard />} />
               <Route path="about" element={<About />} />
-              <Route path="certificate-issuance" element={<CertificateIssuance />} />
+              <Route path="certificates" element={<CertificateIssuance />} />
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
               {/* Báo cáo đã bị loại bỏ */}

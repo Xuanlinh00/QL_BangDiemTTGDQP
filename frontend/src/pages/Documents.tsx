@@ -8,27 +8,16 @@ import { exportToExcel, exportPdfFormatToExcel } from '../utils/excelExport'
 import { GoogleDriveFile } from '../hooks/useGoogleDrive'
 import { docstoreApi } from '../services/api'
 
-// ══════════════════════════════════════
-// Google Drive download helper (standalone, no hook needed)
-// ══════════════════════════════════════
-async function downloadDriveFile(
-  fileId: string,
-  fileName: string,
-  mimeType?: string
-) {
-  // ✅ FIX: Đọc từ localStorage thay vì sessionStorage
+async function downloadDriveFile(fileId: string, fileName: string, mimeType?: string) {
   const token = localStorage.getItem('gdrive_access_token')
   if (!token) {
     toast.error('Chưa đăng nhập Google Drive. Hãy mở Google Drive modal và đăng nhập trước.')
     return
   }
-
   const toastId = toast.loading(`Đang tải: ${fileName}...`)
   try {
     let url: string
     let finalName = fileName
-
-    // Google Workspace files cần export, không dùng alt=media
     if (mimeType?.startsWith('application/vnd.google-apps.')) {
       let exportMime = 'application/pdf'
       if (mimeType.includes('spreadsheet')) {
@@ -47,15 +36,11 @@ async function downloadDriveFile(
     } else {
       url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     }
-
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
     if (!resp.ok) {
       const errText = await resp.text()
       throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 200)}`)
     }
-
     const blob = await resp.blob()
     const blobUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -65,7 +50,6 @@ async function downloadDriveFile(
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(blobUrl)
-
     toast.success(`Đã tải: ${finalName}`, { id: toastId })
   } catch (err: any) {
     console.error('[Download] Error:', err)
@@ -73,9 +57,6 @@ async function downloadDriveFile(
   }
 }
 
-// ══════════════════════════════════════
-// Document types & persistence
-// ══════════════════════════════════════
 interface StoredDocument {
   _id: string
   name: string
@@ -89,16 +70,12 @@ interface StoredDocument {
   webViewLink?: string
   mimeType?: string
   source: 'local' | 'google_drive' | 'mock'
-  // Metadata fields
   academicYear?: string
   cohort?: string
   className?: string
   trainingProgram?: string
 }
 
-// ══════════════════════════════════════
-// Student record interface
-// ══════════════════════════════════════
 interface StoredStudentRecord {
   _id?: string
   docId: string
@@ -126,22 +103,18 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<StoredDocument | null>(null)
   const [editDoc, setEditDoc] = useState<StoredDocument | null>(null)
 
-  // ── Quick preview (single click) ──
   const [quickPreviewDoc, setQuickPreviewDoc] = useState<StoredDocument | null>(null)
   const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // ── Folder navigation (CTĐT → Year) ──
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null)
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
 
-  // ── OCR Review state ──
   const [showOCRReview, setShowOCRReview] = useState(false)
   const [ocrReviewDoc, setOcrReviewDoc] = useState<StoredDocument | null>(null)
   const [ocrPdfUrl, setOcrPdfUrl] = useState<string | null>(null)
   const [ocrFileBlob, setOcrFileBlob] = useState<Blob | null>(null)
 
-  // Sync URL params into filters whenever URL changes
   useEffect(() => {
     const qParam = searchParams.get('q')
     const typeParam = searchParams.get('type')
@@ -149,7 +122,6 @@ export default function Documents() {
     if (typeParam) setFilterType(typeParam)
   }, [searchParams])
 
-  // Load data from API
   useEffect(() => {
     async function load() {
       try {
@@ -171,17 +143,12 @@ export default function Documents() {
 
   const q = searchTerm.trim().toLowerCase()
 
-  // ── CTĐT (training program) folders ──
   const programFolders = useMemo(() => {
     const progs = new Set<string>()
-    documents.forEach(doc => {
-      const p = doc.trainingProgram || ''
-      if (p) progs.add(p)
-    })
+    documents.forEach(doc => { const p = doc.trainingProgram || ''; if (p) progs.add(p) })
     return Array.from(progs).sort()
   }, [documents])
 
-  // ── Year folders (filtered by selected program) ──
   const yearFolders = useMemo(() => {
     const years = new Set<string>()
     documents.forEach(doc => {
@@ -193,14 +160,12 @@ export default function Documents() {
     return Array.from(years).sort().reverse()
   }, [documents, selectedProgram])
 
-  // Documents filtered by selected program + year + search + type
   const filteredDocuments = useMemo(() => {
     return documents.filter(doc => {
       const docProg = doc.trainingProgram || ''
       const matchesProg = !selectedProgram || docProg === selectedProgram
       const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
       const matchesYear = !selectedYear || docYear === selectedYear
-      // Tìm kiếm theo tên file, tên lớp, cohort, trainingProgram
       const searchFields = [doc.name, doc.className, doc.cohort, doc.trainingProgram]
       const matchesSearch = q === '' || searchFields.some(f => typeof f === 'string' && f.toLowerCase().includes(q))
       const matchesType = filterType === 'all' || doc.type === filterType
@@ -209,19 +174,8 @@ export default function Documents() {
   }, [documents, selectedProgram, selectedYear, q, filterType])
 
   const matchedStudents = q === '' ? [] : studentRecords.filter(
-    r => r.ho_ten.toLowerCase().includes(q)
-      || r.mssv.toLowerCase().includes(q)
-      || r.lop.toLowerCase().includes(q)
+    r => r.ho_ten.toLowerCase().includes(q) || r.mssv.toLowerCase().includes(q) || r.lop.toLowerCase().includes(q)
   )
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Completed': return 'bg-green-100 text-green-800'
-      case 'Processing': return 'bg-yellow-100 text-yellow-800'
-      case 'Error': return 'bg-red-100 text-red-800'
-      default: return 'bg-primary-100 text-primary-800'
-    }
-  }
 
   const getSourceBadge = (source: string) => {
     switch (source) {
@@ -231,45 +185,24 @@ export default function Documents() {
     }
   }
 
-  // ── Upload local files → API ──
   const handleUploadFiles = useCallback(async (
-    files: File[], 
+    files: File[],
     documentType: string,
-    metadata?: {
-      academicYear?: string
-      cohort?: string
-      className?: string
-      trainingProgram?: string
-    }
+    metadata?: { academicYear?: string; cohort?: string; className?: string; trainingProgram?: string }
   ) => {
-    // Build folder name from metadata
     let folderName = 'Upload'
-    if (metadata?.cohort && metadata?.className) {
-      folderName = `${metadata.cohort}/${metadata.className}`
-    } else if (metadata?.cohort) {
-      folderName = metadata.cohort
-    }
-
+    if (metadata?.cohort && metadata?.className) folderName = `${metadata.cohort}/${metadata.className}`
+    else if (metadata?.cohort) folderName = metadata.cohort
     try {
       const res = await docstoreApi.upload(files, {
-        folder: folderName,
-        type: documentType,
-        academicYear: metadata?.academicYear || '',
-        cohort: metadata?.cohort || '',
-        className: metadata?.className || '',
-        trainingProgram: metadata?.trainingProgram || '',
+        folder: folderName, type: documentType,
+        academicYear: metadata?.academicYear || '', cohort: metadata?.cohort || '',
+        className: metadata?.className || '', trainingProgram: metadata?.trainingProgram || '',
       })
       const newDocs = res.data.data || []
       setDocuments(prev => [...prev, ...newDocs])
-
-      // Auto-navigate to the uploaded program + year
-      if (metadata?.trainingProgram) {
-        setSelectedProgram(metadata.trainingProgram)
-      }
-      if (metadata?.academicYear) {
-        setSelectedYear(metadata.academicYear)
-      }
-
+      if (metadata?.trainingProgram) setSelectedProgram(metadata.trainingProgram)
+      if (metadata?.academicYear) setSelectedYear(metadata.academicYear)
       let message = `Đã tải lên ${files.length} file`
       if (metadata?.trainingProgram) message += ` - ${metadata.trainingProgram}`
       if (metadata?.academicYear) message += ` - Năm ${metadata.academicYear}`
@@ -282,23 +215,16 @@ export default function Documents() {
     }
   }, [])
 
-  // ── Import from Google Drive ──
   const handleGoogleDriveSelect = useCallback(async (files: GoogleDriveFile[]) => {
     try {
       const newDocs: StoredDocument[] = []
       for (const file of files) {
         const res = await docstoreApi.saveGDrive({
-          name: file.name,
-          folder: 'GoogleDrive',
+          name: file.name, folder: 'GoogleDrive',
           type: file.mimeType?.includes('pdf') ? 'DSGD'
-            : (file.mimeType?.includes('spreadsheet') || file.mimeType?.includes('excel')) ? 'BieuMau'
-            : 'DSGD',
-          pages: 0,
-          ocr_status: 'Pending',
-          extract_status: 'Pending',
-          driveFileId: file.id,
-          webViewLink: file.webViewLink,
-          mimeType: file.mimeType,
+            : (file.mimeType?.includes('spreadsheet') || file.mimeType?.includes('excel')) ? 'BieuMau' : 'DSGD',
+          pages: 0, ocr_status: 'Pending', extract_status: 'Pending',
+          driveFileId: file.id, webViewLink: file.webViewLink, mimeType: file.mimeType,
         })
         newDocs.push(res.data.data)
       }
@@ -310,100 +236,64 @@ export default function Documents() {
     }
   }, [])
 
-  // ── View file ──
   const handleViewFile = useCallback(async (doc: StoredDocument) => {
-    // Local file → preview in modal
     if (doc.source === 'local') {
-      const url = docstoreApi.getFileUrl(doc._id)
-      setPreviewDoc(doc)
-      setPreviewUrl(url)
-      return
+      setPreviewDoc(doc); setPreviewUrl(docstoreApi.getFileUrl(doc._id)); return
     }
-
-    // Google Drive file → iframe embed preview in modal
     if (doc.source === 'google_drive' && doc.driveFileId) {
       let url: string
       if (doc.mimeType?.startsWith('application/vnd.google-apps.')) {
-        if (doc.mimeType.includes('spreadsheet'))
-          url = `https://docs.google.com/spreadsheets/d/${doc.driveFileId}/preview`
-        else if (doc.mimeType.includes('document'))
-          url = `https://docs.google.com/document/d/${doc.driveFileId}/preview`
-        else if (doc.mimeType.includes('presentation'))
-          url = `https://docs.google.com/presentation/d/${doc.driveFileId}/preview`
-        else
-          url = `https://drive.google.com/file/d/${doc.driveFileId}/preview`
+        if (doc.mimeType.includes('spreadsheet')) url = `https://docs.google.com/spreadsheets/d/${doc.driveFileId}/preview`
+        else if (doc.mimeType.includes('document')) url = `https://docs.google.com/document/d/${doc.driveFileId}/preview`
+        else if (doc.mimeType.includes('presentation')) url = `https://docs.google.com/presentation/d/${doc.driveFileId}/preview`
+        else url = `https://drive.google.com/file/d/${doc.driveFileId}/preview`
       } else {
         url = `https://drive.google.com/file/d/${doc.driveFileId}/preview`
       }
-      setPreviewDoc(doc)
-      setPreviewUrl(url)
-      return
+      setPreviewDoc(doc); setPreviewUrl(url); return
     }
-
-    // Mock data
     toast('File mẫu không có nội dung để xem', { icon: 'ℹ️' })
   }, [])
 
-  // ── Close preview ──
-  const closePreview = useCallback(() => {
-    setPreviewDoc(null)
-    setPreviewUrl(null)
-  }, [])
+  const closePreview = useCallback(() => { setPreviewDoc(null); setPreviewUrl(null) }, [])
 
-  // ── Row single click → quick preview ──
   const handleRowClick = useCallback((doc: StoredDocument) => {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
     clickTimerRef.current = setTimeout(() => {
       clickTimerRef.current = null
       if (doc.source === 'local') {
-        setQuickPreviewDoc(doc)
-        setQuickPreviewUrl(docstoreApi.getFileUrl(doc._id))
+        setQuickPreviewDoc(doc); setQuickPreviewUrl(docstoreApi.getFileUrl(doc._id))
       } else if (doc.source === 'google_drive' && doc.driveFileId) {
         const url = doc.mimeType?.includes('spreadsheet')
           ? `https://docs.google.com/spreadsheets/d/${doc.driveFileId}/preview`
           : doc.mimeType?.includes('document')
           ? `https://docs.google.com/document/d/${doc.driveFileId}/preview`
           : `https://drive.google.com/file/d/${doc.driveFileId}/preview`
-        setQuickPreviewDoc(doc)
-        setQuickPreviewUrl(url)
+        setQuickPreviewDoc(doc); setQuickPreviewUrl(url)
       }
     }, 250)
   }, [])
 
-  // ── Row double click → full modal preview ──
   const handleRowDoubleClick = useCallback((doc: StoredDocument) => {
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current)
-      clickTimerRef.current = null
-    }
-    setQuickPreviewDoc(null)
-    setQuickPreviewUrl(null)
+    if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null }
+    setQuickPreviewDoc(null); setQuickPreviewUrl(null)
     handleViewFile(doc)
   }, [handleViewFile])
 
-  // ── Download file ──
   const handleDownloadFile = useCallback(async (doc: StoredDocument) => {
     if (doc.source === 'google_drive' && doc.driveFileId) {
-      await downloadDriveFile(doc.driveFileId, doc.name, doc.mimeType)
-      return
+      await downloadDriveFile(doc.driveFileId, doc.name, doc.mimeType); return
     }
-
     if (doc.source === 'local') {
       const url = docstoreApi.getFileUrl(doc._id)
       const link = document.createElement('a')
-      link.href = url
-      link.download = doc.name
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      toast.success(`Đã tải: ${doc.name}`)
-      return
+      link.href = url; link.download = doc.name
+      document.body.appendChild(link); link.click(); document.body.removeChild(link)
+      toast.success(`Đã tải: ${doc.name}`); return
     }
-
     toast('File mẫu không có nội dung để tải', { icon: 'ℹ️' })
   }, [])
 
-  // ── Delete document ──
   const handleDeleteDoc = useCallback(async (docId: string) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa tài liệu này?')) return
     try {
@@ -411,75 +301,45 @@ export default function Documents() {
       setDocuments(prev => prev.filter(d => d._id !== docId))
       setStudentRecords(prev => prev.filter(r => r.docId !== docId))
       toast.success('Đã xóa tài liệu')
-    } catch (e) {
-      console.error('Delete document failed:', e)
-      toast.error('Xóa thất bại')
-    }
+    } catch (e) { console.error('Delete document failed:', e); toast.error('Xóa thất bại') }
   }, [])
 
-  // ── Edit document ──
   const handleEditDoc = useCallback(async (docId: string, updates: Partial<StoredDocument>) => {
     try {
       const res = await docstoreApi.update(docId, updates as Record<string, unknown>)
       setDocuments(prev => prev.map(d => d._id === docId ? res.data.data : d))
-      setEditDoc(null)
-      toast.success('Đã cập nhật tài liệu')
-    } catch (e) {
-      console.error('Edit document failed:', e)
-      toast.error('Cập nhật thất bại')
-    }
+      setEditDoc(null); toast.success('Đã cập nhật tài liệu')
+    } catch (e) { console.error('Edit document failed:', e); toast.error('Cập nhật thất bại') }
   }, [])
 
-  // ── Open OCR Review Modal ──
   const handleOpenOCRReview = useCallback(async (doc: StoredDocument) => {
     let pdfUrl: string | null = null
     let fileBlob: Blob | null = null
-
     if (doc.source === 'local') {
-      // Load file from API as blob for OCR processing
       try {
         const response = await fetch(docstoreApi.getFileUrl(doc._id))
-        if (response.ok) {
-          fileBlob = await response.blob()
-          pdfUrl = URL.createObjectURL(fileBlob)
-        }
-      } catch (e) {
-        console.warn('[OCR] Could not load blob:', e)
-      }
+        if (response.ok) { fileBlob = await response.blob(); pdfUrl = URL.createObjectURL(fileBlob) }
+      } catch (e) { console.warn('[OCR] Could not load blob:', e) }
     } else if (doc.source === 'google_drive' && doc.driveFileId) {
       pdfUrl = `https://drive.google.com/file/d/${doc.driveFileId}/preview`
     }
-
-    setOcrFileBlob(fileBlob)
-    setOcrReviewDoc(doc)
-    setOcrPdfUrl(pdfUrl)
-    setShowOCRReview(true)
+    setOcrFileBlob(fileBlob); setOcrReviewDoc(doc); setOcrPdfUrl(pdfUrl); setShowOCRReview(true)
   }, [])
 
   const handleOCRSave = useCallback(async (records: StudentRecord[], _meta: ExtractMeta) => {
     if (!ocrReviewDoc) return
     try {
-      // Update document status
       const docRes = await docstoreApi.update(ocrReviewDoc._id, { ocr_status: 'Completed', extract_status: 'Completed' })
-      setDocuments(prev => prev.map(d =>
-        d._id === ocrReviewDoc._id ? docRes.data.data : d
-      ))
-      // Save student records via API
+      setDocuments(prev => prev.map(d => d._id === ocrReviewDoc._id ? docRes.data.data : d))
       const recsRes = await docstoreApi.bulkSaveStudentRecords(
-        ocrReviewDoc._id,
-        ocrReviewDoc.name,
-        records as unknown as Record<string, unknown>[]
+        ocrReviewDoc._id, ocrReviewDoc.name, records as unknown as Record<string, unknown>[]
       )
       setStudentRecords(prev => {
         const filtered = prev.filter(r => r.docId !== ocrReviewDoc._id)
         return [...filtered, ...(recsRes.data.data || [])]
       })
       toast.success(`Đã xác nhận ${records.length} bản ghi`)
-    } catch (e) {
-      console.error('OCR save failed:', e)
-      toast.error('Lưu bản ghi thất bại')
-    }
-    // Tự động xuất Excel ngay sau khi xác nhận
+    } catch (e) { console.error('OCR save failed:', e); toast.error('Lưu bản ghi thất bại') }
     if (records.length > 0) {
       setTimeout(() => {
         exportPdfFormatToExcel(records as any[], _meta, ocrReviewDoc.name, ocrReviewDoc.type as 'DSGD' | 'QD' | 'BieuMau')
@@ -488,69 +348,22 @@ export default function Documents() {
     }
   }, [ocrReviewDoc])
 
-  // ── Export Excel from Node backend (structured DB records) ──
-  const handleExportExcelDB = useCallback(() => {
-    const url = '/api/documents/export/excel'
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `export_${new Date().toISOString().split('T')[0]}.xlsx`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    toast.success('Đang tải file Excel từ database...')
-  }, [])
-
-  // ── Export Excel (local metadata only) ──
-  const handleExportToExcel = () => {
-    const exportData = filteredDocuments.map(doc => ({
-      'Tên file': doc.name,
-      'Thư mục': doc.folder,
-      'Loại': doc.type,
-      'Nguồn': doc.source === 'google_drive' ? 'Google Drive' : doc.source === 'local' ? 'Tải lên' : 'Mẫu',
-      'Trang': doc.pages || 'N/A',
-      'Trạng thái OCR': doc.ocr_status,
-      'Trạng thái Extract': doc.extract_status,
-      'Ngày upload': doc.uploaded_at,
-    }))
-    exportToExcel(exportData, {
-      fileName: `documents_${new Date().toISOString().split('T')[0]}`,
-      sheetName: 'Tài liệu',
-    })
-    toast.success('Đã xuất file Excel')
-  }
-
-  // ── Stats ──
-  const stats = {
-    total: filteredDocuments.length,
-    completed: filteredDocuments.filter(d => d.ocr_status === 'Completed').length,
-    processing: filteredDocuments.filter(d => d.ocr_status === 'Processing').length,
-    error: filteredDocuments.filter(d => d.ocr_status === 'Error').length,
-  }
-
-  // Helper: count docs per year (within selected program)
-  const countDocsForYear = (year: string) => {
-    return documents.filter(doc => {
+  const countDocsForYear = (year: string) =>
+    documents.filter(doc => {
       const docProg = doc.trainingProgram || ''
       const matchesProg = !selectedProgram || docProg === selectedProgram
       const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
       return matchesProg && docYear === year
     }).length
-  }
 
-  // Helper: count docs per program
-  const countDocsForProgram = (prog: string) => {
-    return documents.filter(doc => (doc.trainingProgram || '') === prog).length
-  }
+  const countDocsForProgram = (prog: string) =>
+    documents.filter(doc => (doc.trainingProgram || '') === prog).length
 
-  // Helper: total size for year
-  const formatFileSize = (bytes: number): string => {
-    if (!bytes || bytes <= 0) return '—'
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" /></div>
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -558,56 +371,24 @@ export default function Documents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 dark:text-white">Quản lý Bảng điểm</h1>
-          {/* Breadcrumb */}
           <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-slate-400 mt-1">
             <span>📊 Bảng điểm</span>
-            {selectedProgram && (
-              <>
-                <span className="mx-1">›</span>
-                <span className="text-gray-700 dark:text-slate-300">{selectedProgram}</span>
-              </>
-            )}
-            {selectedYear && (
-              <>
-                <span className="mx-1">›</span>
-                <span className="text-gray-700 dark:text-slate-300">Năm {selectedYear}</span>
-              </>
-            )}
-            <span className="text-gray-400 dark:text-slate-500 ml-2">
-              ({filteredDocuments.length} tài liệu)
-            </span>
+            {selectedProgram && (<><span className="mx-1">›</span><span className="text-gray-700 dark:text-slate-300">{selectedProgram}</span></>)}
+            {selectedYear && (<><span className="mx-1">›</span><span className="text-gray-700 dark:text-slate-300">Năm {selectedYear}</span></>)}
+            <span className="text-gray-400 dark:text-slate-500 ml-2">({filteredDocuments.length} tài liệu)</span>
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors shadow-sm"
-          >
+          <button onClick={() => setShowUploadModal(true)} className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors shadow-sm">
             📤 Tải lên
           </button>
-          <button
-            onClick={() => setShowGoogleDriveModal(true)}
-            className="px-5 py-2.5 bg-accent-600 hover:bg-accent-700 text-white font-medium rounded-xl transition-colors shadow-sm"
-          >
+          <button onClick={() => setShowGoogleDriveModal(true)} className="px-5 py-2.5 bg-accent-600 hover:bg-accent-700 text-white font-medium rounded-xl transition-colors shadow-sm">
             🔗 Google Drive
-          </button>
-          <button
-            onClick={handleExportToExcel}
-            className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-xl transition-colors shadow-sm"
-          >
-            📊 Xuất Excel
-          </button>
-          <button
-            onClick={handleExportExcelDB}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
-            title="Xuất Excel từ dữ liệu đã OCR và xác nhận"
-          >
-            🏦 Xuất Excel (DB)
           </button>
         </div>
       </div>
 
-      {/* ══════ Filter: CTĐT chips ══════ */}
+      {/* CTĐT filter */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden transition-colors">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300">🎓 Chương trình đào tạo</h2>
@@ -620,11 +401,7 @@ export default function Documents() {
         <div className="p-3 flex flex-wrap gap-2">
           <button
             onClick={() => { setSelectedProgram(null); setSelectedYear(null) }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              !selectedProgram
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-            }`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!selectedProgram ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
           >
             Tất cả ({documents.length})
           </button>
@@ -632,28 +409,19 @@ export default function Documents() {
             <button
               key={prog}
               onClick={() => { setSelectedProgram(prog); setSelectedYear(null) }}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                selectedProgram === prog
-                  ? 'bg-primary-600 text-white shadow-sm'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-              }`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${selectedProgram === prog ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
             >
               {prog} ({countDocsForProgram(prog)})
             </button>
           ))}
         </div>
 
-        {/* Year sub-filter (shown when a program is selected) */}
         {selectedProgram && yearFolders.length > 0 && (
           <div className="px-3 pb-3 flex flex-wrap gap-2 border-t border-gray-100 dark:border-slate-700 pt-2">
             <span className="text-xs text-gray-500 dark:text-slate-400 self-center mr-1">📅 Năm:</span>
             <button
               onClick={() => setSelectedYear(null)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                !selectedYear
-                  ? 'bg-amber-500 text-white shadow-sm'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${!selectedYear ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
             >
               Tất cả
             </button>
@@ -661,11 +429,7 @@ export default function Documents() {
               <div key={year} className="flex items-center gap-1">
                 <button
                   onClick={() => setSelectedYear(year)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    selectedYear === year
-                      ? 'bg-amber-500 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                  }`}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${selectedYear === year ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
                 >
                   {year} ({countDocsForYear(year)})
                 </button>
@@ -683,17 +447,12 @@ export default function Documents() {
                         const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
                         return docProg === selectedProgram && docYear === year
                       })
-                      for (const doc of docsToDelete) {
-                        await docstoreApi.delete(doc._id)
-                      }
+                      for (const doc of docsToDelete) await docstoreApi.delete(doc._id)
                       setDocuments(prev => prev.filter(d => !docsToDelete.some(del => del._id === d._id)))
                       setStudentRecords(prev => prev.filter(r => !docsToDelete.some(d => d._id === r.docId)))
                       setSelectedYear(null)
                       toast.success(`Đã xóa ${count} tài liệu của năm ${year}`)
-                    } catch (e) {
-                      console.error('Delete year failed:', e)
-                      toast.error('Xóa thất bại')
-                    }
+                    } catch (e) { console.error('Delete year failed:', e); toast.error('Xóa thất bại') }
                   }}
                   className="px-2 py-1 rounded-md text-xs font-medium bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
                   title={`Xóa tất cả tài liệu của năm ${year}`}
@@ -708,21 +467,14 @@ export default function Documents() {
                 if (!window.confirm(`Bạn có chắc chắn muốn xóa tất cả ${count} tài liệu của chương trình "${selectedProgram}"?`)) return
                 try {
                   const docsToDelete = documents.filter(doc => (doc.trainingProgram || '') === selectedProgram)
-                  for (const doc of docsToDelete) {
-                    await docstoreApi.delete(doc._id)
-                  }
+                  for (const doc of docsToDelete) await docstoreApi.delete(doc._id)
                   setDocuments(prev => prev.filter(d => (d.trainingProgram || '') !== selectedProgram))
                   setStudentRecords(prev => prev.filter(r => !docsToDelete.some(d => d._id === r.docId)))
-                  setSelectedProgram(null)
-                  setSelectedYear(null)
+                  setSelectedProgram(null); setSelectedYear(null)
                   toast.success(`Đã xóa ${count} tài liệu`)
-                } catch (e) {
-                  console.error('Delete all failed:', e)
-                  toast.error('Xóa thất bại')
-                }
+                } catch (e) { console.error('Delete all failed:', e); toast.error('Xóa thất bại') }
               }}
               className="ml-auto px-3 py-1 rounded-md text-xs font-medium bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
-              title="Xóa tất cả tài liệu của chương trình này"
             >
               🗑️ Xóa tất cả
             </button>
@@ -730,10 +482,9 @@ export default function Documents() {
         )}
       </div>
 
-      {/* Search / Filter */}
+      {/* Search */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-4 space-y-3 transition-colors">
         <div className="flex flex-col md:flex-row gap-3">
-          {/* Unified search input */}
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
             <input
@@ -744,28 +495,14 @@ export default function Documents() {
               className="w-full pl-9 pr-4 py-2.5 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm text-gray-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500"
             />
             {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
-              >×</button>
+              <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
             )}
           </div>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="px-4 py-2.5 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm text-gray-800 dark:text-slate-200"
-          >
-            <option value="all">Tất cả loại</option>
-            <option value="DSGD">Danh sách điểm</option>
-            <option value="QD">Quyết định</option>
-            <option value="BieuMau">Biểu mẫu</option>
-          </select>
           <button
             onClick={async () => {
               try {
                 const [docsRes, recsRes] = await Promise.all([docstoreApi.list(), docstoreApi.listStudentRecords()])
-                setDocuments(docsRes.data.data || [])
-                setStudentRecords(recsRes.data.data || [])
+                setDocuments(docsRes.data.data || []); setStudentRecords(recsRes.data.data || [])
                 toast.success('Đã làm mới')
               } catch { toast.error('Làm mới thất bại') }
             }}
@@ -775,7 +512,6 @@ export default function Documents() {
           </button>
         </div>
 
-        {/* Search summary chips */}
         {q && (
           <div className="flex flex-wrap gap-2 text-xs text-gray-500">
             <span className="bg-primary-50 text-primary-700 px-2.5 py-1 rounded-full border border-primary-200">
@@ -789,7 +525,6 @@ export default function Documents() {
           </div>
         )}
 
-        {/* Student search results — shown whenever there are matches */}
         {matchedStudents.length > 0 && (() => {
           const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
           const highlight = (text: string) =>
@@ -826,15 +561,11 @@ export default function Documents() {
                         <td className="px-3 py-2 text-gray-700">{highlight(r.lop)}</td>
                         <td className="px-3 py-2 text-center font-semibold text-gray-800">{r.diem_qp}</td>
                         <td className="px-3 py-2 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            r.ket_qua === 'Đạt' ? 'bg-green-100 text-green-800' :
-                            r.ket_qua === 'Không đạt' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>{r.ket_qua || '—'}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.ket_qua === 'Đạt' ? 'bg-green-100 text-green-800' : r.ket_qua === 'Không đạt' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                            {r.ket_qua || '—'}
+                          </span>
                         </td>
-                        <td className="px-3 py-2 text-gray-500 text-xs truncate max-w-[180px]" title={r.docName}>
-                          📄 {r.docName}
-                        </td>
+                        <td className="px-3 py-2 text-gray-500 text-xs truncate max-w-[180px]" title={r.docName}>📄 {r.docName}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -847,235 +578,229 @@ export default function Documents() {
 
       {/* Table + Side Preview */}
       <div className="flex gap-4 h-[calc(100vh-18rem)]">
-      {/* Table */}
-      <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col transition-colors ${quickPreviewDoc ? 'w-1/3 xl:w-[45%]' : 'w-full'}`}>
-        <div className="flex flex-col h-full overflow-hidden">
-          <table className="w-full text-base flex-shrink-0">
-            <thead className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700">
-              <tr>
-                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Tên file</th>
-                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Nguồn</th>
-                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Loại</th>
-                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">OCR</th>
-                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Extract</th>
-                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Ngày</th>
-                <th className="px-4 py-4 text-center text-sm font-semibold text-gray-600 dark:text-slate-400 uppercase">Hành động</th>
-              </tr>
-            </thead>
-          </table>
-          <div className="flex-1 overflow-y-auto">
-            <table className="w-full text-base">
-              <tbody>
-            {filteredDocuments.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">Không có tài liệu nào</td></tr>
-            ) : (
-              filteredDocuments.map((doc) => {
-                const sourceBadge = getSourceBadge(doc.source)
-                return (
-                  <tr
-                    key={doc._id}
-                    onClick={() => handleRowClick(doc)}
-                    onDoubleClick={() => handleRowDoubleClick(doc)}
-                    className={`border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer ${quickPreviewDoc?._id === doc._id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}
-                  >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{doc.mimeType?.includes('pdf') ? '📄' : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel') ? '📊' : '📎'}</span>
-                        <span className="font-medium text-gray-800 dark:text-slate-200 truncate max-w-[200px] text-base" title={doc.name}>
-                          {q
-                            ? doc.name.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, i) =>
-                                part.toLowerCase() === q
-                                  ? <mark key={i} className="bg-yellow-200 text-gray-900 rounded px-0.5">{part}</mark>
-                                  : part
-                              )
-                            : doc.name
-                          }
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${sourceBadge.color}`}>
-                        {sourceBadge.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium">
-                        {doc.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${getStatusColor(doc.ocr_status)}`}>
-                        {doc.ocr_status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-sm font-medium ${getStatusColor(doc.extract_status)}`}>
-                        {doc.extract_status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-500 dark:text-slate-400">{doc.uploaded_at}</td>
-                    <td className="px-4 py-4" onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => handleOpenOCRReview(doc)}
-                          className="px-3 py-2 text-sm bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded font-medium transition-colors"
-                          title="OCR & Xem xét dữ liệu"
-                        >
-                          🔬 OCR
-                        </button>
-                        {(() => {
-                          const docRecs = studentRecords.filter(r => r.docId === doc._id)
-                          if (docRecs.length === 0) return null
-                          return (
-                            <button
-                              onClick={() => {
-                                exportPdfFormatToExcel(docRecs as any[], {
-                                  lop: docRecs[0]?.lop,
-                                  total_records: docRecs.length,
-                                  so_dat: docRecs.filter(r => r.ket_qua === 'Đạt').length,
-                                  so_khong_dat: docRecs.filter(r => r.ket_qua === 'Không đạt').length,
-                                }, doc.name, doc.type as 'DSGD' | 'QD' | 'BieuMau')
-                                toast.success(`Đã xuất Excel: ${doc.name.replace(/\.pdf$/i, '')}.xlsx`)
-                              }}
-                              className="px-3 py-2 text-sm bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded font-medium transition-colors"
-                              title={`Xuất Excel (${docRecs.length} bản ghi)`}
-                            >
-                              📥 Excel
-                            </button>
-                          )
-                        })()}
-                        <button
-                          onClick={() => handleViewFile(doc)}
-                          className="px-3 py-2 text-sm bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium transition-colors"
-                          title="Xem file"
-                        >
-                          👁️ Xem
-                        </button>
-                        <button
-                          onClick={() => handleDownloadFile(doc)}
-                          className="px-3 py-2 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded font-medium transition-colors"
-                          title="Tải file"
-                        >
-                          ⬇️ Tải
-                        </button>
-                        {doc.source === 'google_drive' && doc.webViewLink && (
-                          <a
-                            href={doc.webViewLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-2 text-sm bg-primary-100 hover:bg-primary-200 text-primary-700 rounded font-medium transition-colors"
-                            title="Mở trong Drive"
-                          >
-                            🔗
-                          </a>
-                        )}
-                        <button
-                          onClick={() => setEditDoc(doc)}
-                          className="px-3 py-2 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium transition-colors"
-                          title="Sửa"
-                        >
-                          ✏️ Sửa
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDoc(doc._id)}
-                          className="px-3 py-2 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded font-medium transition-colors"
-                          title="Xóa"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-              </tbody>
+        {/* Table */}
+        <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col transition-colors ${quickPreviewDoc ? 'w-1/3 xl:w-[45%]' : 'w-full'}`}>
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* ── Fixed header ── */}
+            <table className="w-full text-sm flex-shrink-0">
+              <thead className="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-200 dark:border-slate-700">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">Tên file</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide w-24">Nguồn</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide w-32">Ngày</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">Hành động</th>
+                </tr>
+              </thead>
             </table>
+
+            {/* ── Scrollable body ── */}
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full text-sm">
+                <tbody>
+                  {filteredDocuments.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
+                        Không có tài liệu nào
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDocuments.map((doc) => {
+                      const sourceBadge = getSourceBadge(doc.source)
+                      return (
+                        <tr
+                          key={doc._id}
+                          onClick={() => handleRowClick(doc)}
+                          onDoubleClick={() => handleRowDoubleClick(doc)}
+                          className={`border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer ${quickPreviewDoc?._id === doc._id ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}
+                        >
+                          {/* Tên file */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base flex-shrink-0">
+                                {doc.mimeType?.includes('pdf') ? '📄' : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel') ? '📊' : '📎'}
+                              </span>
+                              <span className="font-medium text-gray-800 dark:text-slate-200 truncate max-w-[220px]" title={doc.name}>
+                                {q
+                                  ? doc.name.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((part, i) =>
+                                      part.toLowerCase() === q
+                                        ? <mark key={i} className="bg-yellow-200 text-gray-900 rounded px-0.5">{part}</mark>
+                                        : part
+                                    )
+                                  : doc.name
+                                }
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Nguồn */}
+                          <td className="px-4 py-3 w-24">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${sourceBadge.color}`}>
+                              {sourceBadge.label}
+                            </span>
+                          </td>
+
+                          {/* Ngày */}
+                          <td className="px-4 py-3 w-32 text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">
+                            {doc.uploaded_at}
+                          </td>
+
+                          {/* Hành động */}
+                          <td className="px-4 py-3" onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-2">
+                              {/* Nút chính: Xem */}
+                              <button
+                                onClick={() => handleViewFile(doc)}
+                                className="px-3 py-1.5 text-xs bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors shadow-sm"
+                                title="Xem file"
+                              >
+                                👁️ Xem
+                              </button>
+                              
+                              {/* Nút Excel nếu đã có dữ liệu */}
+                              {(() => {
+                                const docRecs = studentRecords.filter(r => r.docId === doc._id)
+                                if (docRecs.length === 0) return null
+                                return (
+                                  <button
+                                    onClick={() => {
+                                      exportPdfFormatToExcel(docRecs as any[], {
+                                        lop: docRecs[0]?.lop,
+                                        total_records: docRecs.length,
+                                        so_dat: docRecs.filter(r => r.ket_qua === 'Đạt').length,
+                                        so_khong_dat: docRecs.filter(r => r.ket_qua === 'Không đạt').length,
+                                      }, doc.name, doc.type as 'DSGD' | 'QD' | 'BieuMau')
+                                      toast.success(`Đã xuất Excel: ${doc.name.replace(/\.pdf$/i, '')}.xlsx`)
+                                    }}
+                                    className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors shadow-sm"
+                                    title={`Xuất Excel (${docRecs.length} bản ghi)`}
+                                  >
+                                    📥 Excel
+                                  </button>
+                                )
+                              })()}
+                              
+                              {/* Menu dropdown cho các hành động phụ */}
+                              <div className="relative group">
+                                <button
+                                  className="px-2 py-1.5 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                  title="Thêm hành động"
+                                >
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5"/>
+                                    <circle cx="8" cy="8" r="1.5"/>
+                                    <circle cx="8" cy="13" r="1.5"/>
+                                  </svg>
+                                </button>
+                                
+                                {/* Dropdown menu */}
+                                <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                  <div className="py-1">
+                                    <button
+                                      onClick={() => handleDownloadFile(doc)}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                    >
+                                      <span>⬇️</span>
+                                      <span>Tải xuống</span>
+                                    </button>
+                                    
+                                    {doc.source === 'google_drive' && doc.webViewLink && (
+                                      <a
+                                        href={doc.webViewLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                      >
+                                        <span>🔗</span>
+                                        <span>Mở trong Drive</span>
+                                      </a>
+                                    )}
+                                    
+                                    <button
+                                      onClick={() => setEditDoc(doc)}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                                    >
+                                      <span>✏️</span>
+                                      <span>Chỉnh sửa</span>
+                                    </button>
+                                    
+                                    <div className="border-t border-gray-200 dark:border-slate-700 my-1"></div>
+                                    
+                                    <button
+                                      onClick={() => handleDeleteDoc(doc._id)}
+                                      className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                                    >
+                                      <span>🗑️</span>
+                                      <span>Xóa</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Side Preview Panel (single click) */}
-      {quickPreviewDoc && (
-        <div className="w-2/3 xl:w-[55%] flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-primary-200 dark:border-primary-700 overflow-hidden transition-all">
-          {/* Preview header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-primary-50 dark:bg-primary-900/20 shrink-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <span>{quickPreviewDoc.mimeType?.includes('pdf') ? '📄' : '📊'}</span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{quickPreviewDoc.name}</p>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500">{quickPreviewDoc.uploaded_at} {quickPreviewDoc.type ? `• ${quickPreviewDoc.type}` : ''}</p>
+        {/* Side Preview Panel */}
+        {quickPreviewDoc && (
+          <div className="w-2/3 xl:w-[55%] flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-primary-200 dark:border-primary-700 overflow-hidden transition-all">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-primary-50 dark:bg-primary-900/20 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span>{quickPreviewDoc.mimeType?.includes('pdf') ? '📄' : '📊'}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{quickPreviewDoc.name}</p>
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500">{quickPreviewDoc.uploaded_at}{quickPreviewDoc.type ? ` • ${quickPreviewDoc.type}` : ''}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => { handleViewFile(quickPreviewDoc); setQuickPreviewDoc(null); setQuickPreviewUrl(null) }}
+                  className="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  Xem đầy đủ
+                </button>
+                <button
+                  onClick={() => handleDownloadFile(quickPreviewDoc)}
+                  className="px-2.5 py-1.5 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-800/30 text-purple-700 dark:text-purple-400 text-xs font-medium rounded-lg transition-colors"
+                >
+                  ⬇️ Tải
+                </button>
+                <button
+                  onClick={() => { setQuickPreviewDoc(null); setQuickPreviewUrl(null) }}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => { handleViewFile(quickPreviewDoc); setQuickPreviewDoc(null); setQuickPreviewUrl(null) }}
-                className="px-2.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded-lg transition-colors"
-              >
-                Xem đầy đủ
-              </button>
-              <button
-                onClick={() => handleDownloadFile(quickPreviewDoc)}
-                className="px-2.5 py-1.5 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-800/30 text-purple-700 dark:text-purple-400 text-xs font-medium rounded-lg transition-colors"
-              >
-                ⬇️ Tải
-              </button>
-              <button
-                onClick={() => { setQuickPreviewDoc(null); setQuickPreviewUrl(null) }}
-                className="p-1.5 text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+            <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-900 relative">
+              {quickPreviewUrl ? (
+                <iframe src={quickPreviewUrl} className="w-full h-full border-0" title={quickPreviewDoc.name} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-slate-500">
+                  <svg className="w-16 h-16 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm">Không thể xem trước file này</p>
+                </div>
+              )}
             </div>
           </div>
-          {/* PDF Preview area */}
-          <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-900 relative">
-            {quickPreviewUrl ? (
-              <iframe src={quickPreviewUrl} className="w-full h-full border-0" title={quickPreviewDoc.name} />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-slate-500">
-                <svg className="w-16 h-16 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                <p className="text-sm">Không thể xem trước file này</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      </div>{/* end flex row */}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-primary-100 dark:border-primary-800/30 p-4 text-center transition-colors">
-          <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{stats.total}</p>
-          <p className="text-gray-500 dark:text-slate-400 text-sm">Tổng file</p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-accent-100 dark:border-accent-800/30 p-4 text-center transition-colors">
-          <p className="text-2xl font-bold text-accent-600 dark:text-accent-400">{stats.completed}</p>
-          <p className="text-gray-500 dark:text-slate-400 text-sm">Hoàn tất</p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-yellow-100 dark:border-yellow-800/30 p-4 text-center transition-colors">
-          <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.processing}</p>
-          <p className="text-gray-500 dark:text-slate-400 text-sm">Đang xử lý</p>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-red-100 dark:border-red-800/30 p-4 text-center transition-colors">
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.error}</p>
-          <p className="text-gray-500 dark:text-slate-400 text-sm">Lỗi</p>
-        </div>
+        )}
       </div>
 
-      {/* ═══ Modals (always rendered regardless of folder view) ═══ */}
-      <UploadModal
-        isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
-        onUpload={handleUploadFiles}
-      />
-      <GoogleDriveModal
-        isOpen={showGoogleDriveModal}
-        onClose={() => setShowGoogleDriveModal(false)}
-        onSelect={handleGoogleDriveSelect}
-      />
+      {/* Modals */}
+      <UploadModal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} onUpload={handleUploadFiles} />
+      <GoogleDriveModal isOpen={showGoogleDriveModal} onClose={() => setShowGoogleDriveModal(false)} onSelect={handleGoogleDriveSelect} />
 
-      {/* ── OCR Review Modal ── */}
       {ocrReviewDoc && (
         <OCRReviewModal
           isOpen={showOCRReview}
@@ -1090,55 +815,33 @@ export default function Documents() {
         />
       )}
 
-      {/* ── File Preview Modal (Full Width) ── */}
       {previewDoc && (
         <div className="fixed inset-0 bg-white dark:bg-slate-900 z-50 flex flex-col">
-          {/* Header */}
           <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between shrink-0 bg-gray-50 dark:bg-slate-800">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white truncate pr-4">
               {previewDoc.mimeType?.includes('pdf') ? '📄' : '📊'} {previewDoc.name}
             </h3>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => handleDownloadFile(previewDoc)}
-                className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
+              <button onClick={() => handleDownloadFile(previewDoc)} className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
                 ⬇️ Tải xuống
               </button>
               {previewDoc.source === 'google_drive' && previewDoc.webViewLink && (
-                <a
-                  href={previewDoc.webViewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-                >
+                <a href={previewDoc.webViewLink} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors">
                   🔗 Mở trong Drive
                 </a>
               )}
-              <button
-                onClick={closePreview}
-                className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-2xl px-2"
-              >
-                ✕
-              </button>
+              <button onClick={closePreview} className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-2xl px-2">✕</button>
             </div>
           </div>
-          {/* Body - Full Width PDF */}
           <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-950">
             {previewUrl ? (
-              <iframe
-                src={previewUrl}
-                className="w-full h-full border-0"
-                title={previewDoc.name}
-                allow="autoplay"
-              />
+              <iframe src={previewUrl} className="w-full h-full border-0" title={previewDoc.name} allow="autoplay" />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
                   <p className="text-lg mb-2">Không thể xem trước file này</p>
                   {previewDoc.webViewLink && (
-                    <a href={previewDoc.webViewLink} target="_blank" rel="noopener noreferrer"
-                      className="text-primary-600 dark:text-primary-400 hover:underline">
+                    <a href={previewDoc.webViewLink} target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">
                       Mở trong Google Drive →
                     </a>
                   )}
@@ -1148,13 +851,9 @@ export default function Documents() {
           </div>
         </div>
       )}
-      {/* Edit Document Modal */}
+
       {editDoc && (
-        <EditDocModal
-          doc={editDoc}
-          onClose={() => setEditDoc(null)}
-          onSave={(updates) => handleEditDoc(editDoc._id, updates)}
-        />
+        <EditDocModal doc={editDoc} onClose={() => setEditDoc(null)} onSave={(updates) => handleEditDoc(editDoc._id, updates)} />
       )}
     </div>
   )
@@ -1177,7 +876,6 @@ function EditDocModal({ doc, onClose, onSave }: {
   const currentYear = new Date().getFullYear()
   const yearOptions = Array.from({ length: currentYear - 2014 + 2 }, (_, i) => currentYear + 1 - i)
 
-  // If existing doc has a program not in default list, add it
   useState(() => {
     if (doc.trainingProgram && !programOptions.includes(doc.trainingProgram)) {
       setProgramOptions(prev => [...prev, doc.trainingProgram!])
@@ -1198,51 +896,31 @@ function EditDocModal({ doc, onClose, onSave }: {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Chương trình đào tạo</label>
-            <div className="flex gap-2">
-              <select
-                value={showCustomProgram ? '__custom__' : trainingProgram}
-                onChange={e => {
-                  if (e.target.value === '__custom__') {
-                    setShowCustomProgram(true)
-                    setTrainingProgram('')
-                    setCustomProgram('')
-                  } else {
-                    setShowCustomProgram(false)
-                    setTrainingProgram(e.target.value)
-                    setCustomProgram('')
-                  }
-                }}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
-              >
-                <option value="">-- Chọn CTĐT --</option>
-                {programOptions.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-                <option value="__custom__">＋ Thêm mới...</option>
-              </select>
-            </div>
+            <select
+              value={showCustomProgram ? '__custom__' : trainingProgram}
+              onChange={e => {
+                if (e.target.value === '__custom__') { setShowCustomProgram(true); setTrainingProgram(''); setCustomProgram('') }
+                else { setShowCustomProgram(false); setTrainingProgram(e.target.value); setCustomProgram('') }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
+            >
+              <option value="">-- Chọn CTĐT --</option>
+              {programOptions.map(p => <option key={p} value={p}>{p}</option>)}
+              <option value="__custom__">＋ Thêm mới...</option>
+            </select>
             {showCustomProgram && (
               <div className="flex gap-2 mt-2">
                 <input
-                  type="text"
-                  value={customProgram}
-                  onChange={e => setCustomProgram(e.target.value)}
-                  placeholder="Nhập tên CTĐT mới"
+                  type="text" value={customProgram} onChange={e => setCustomProgram(e.target.value)}
+                  placeholder="Nhập tên CTĐT mới" autoFocus
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
-                  autoFocus
                 />
                 <button
                   type="button"
                   onClick={() => {
                     const val = customProgram.trim()
-                    if (val && !programOptions.includes(val)) {
-                      setProgramOptions(prev => [...prev, val])
-                    }
-                    if (val) {
-                      setTrainingProgram(val)
-                      setShowCustomProgram(false)
-                      setCustomProgram('')
-                    }
+                    if (val && !programOptions.includes(val)) setProgramOptions(prev => [...prev, val])
+                    if (val) { setTrainingProgram(val); setShowCustomProgram(false); setCustomProgram('') }
                   }}
                   className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl transition-colors"
                 >
@@ -1255,9 +933,7 @@ function EditDocModal({ doc, onClose, onSave }: {
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Năm học</label>
             <select value={academicYear} onChange={e => setAcademicYear(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none">
               <option value="">-- Chọn năm --</option>
-              {yearOptions.map(y => (
-                <option key={y} value={String(y)}>{y}</option>
-              ))}
+              {yearOptions.map(y => <option key={y} value={String(y)}>{y}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">

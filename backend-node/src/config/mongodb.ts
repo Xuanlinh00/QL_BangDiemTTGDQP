@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import { logger } from './logger'
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://user:ocH1WGTKmC0dQ1gW@cluster0.tqmq2ht.mongodb.net/tvu_gdqp?appName=Cluster0'
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/tvu_documents?authSource=admin'
 
 export async function connectMongoDB() {
   try {
