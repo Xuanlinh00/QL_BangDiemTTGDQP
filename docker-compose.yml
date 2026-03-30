@@ -131,7 +131,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MONGODB_URI: mongodb://admin:password@mongodb:27017/tvu_documents?authSource=admin
+      MONGODB_URL: mongodb://admin:password@mongodb:27017
+      MONGODB_DB_NAME: tvu_documents
       GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials.json
     volumes:
       - ./backend-python/google-credentials.json:/app/google-credentials.json:ro
