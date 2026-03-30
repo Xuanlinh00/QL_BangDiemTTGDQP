@@ -48,6 +48,19 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/docstore', docstoreRoutes)
 app.use('/api/activities', activitiesRoutes)
 
+// Root endpoint
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'TVU GDQP-AN Backend API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+    }
+  })
+})
+
 // Suppress Chrome DevTools probe
 app.get('/.well-known/appspecific/com.chrome.devtools.json', (_req, res) => {
   res.status(200).json({})
