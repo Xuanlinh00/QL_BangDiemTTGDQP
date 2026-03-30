@@ -15,12 +15,16 @@ services:
         sync: false
       - key: REDIS_PORT
         value: 6379
+      - key: REDIS_PASSWORD
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://tvu-frontend.onrender.com,http://localhost:5173
+        value: https://tvu-frontend.onrender.com,https://tvu-backend-node.onrender.com,http://localhost:5173
       - key: PYTHON_WORKER_URL
         value: https://tvu-backend-python.onrender.com
+      - key: LOG_LEVEL
+        value: info
 
   # Backend Python
   - type: web

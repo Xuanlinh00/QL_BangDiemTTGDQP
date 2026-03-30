@@ -1,26 +1,18 @@
-import { DataSource } from 'typeorm'
-import { logger } from './logger'
+/**
+ * ⚠️ DEPRECATED: This file is no longer used
+ * The application now uses MongoDB only via src/config/mongodb.ts
+ * TypeORM and PostgreSQL have been removed from the project.
+ * 
+ * Keeping this file for reference only. Can be safely deleted.
+ */
 
-export const AppDataSource = new DataSource({
-  type: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'tvu_gdqp',
-  synchronize: process.env.NODE_ENV === 'development',
-  logging: process.env.NODE_ENV === 'development',
-  entities: ['src/entities/**/*.ts'],
-  migrations: ['src/migrations/**/*.ts'],
-  subscribers: ['src/subscribers/**/*.ts'],
-})
+// Legacy TypeORM + PostgreSQL configuration (UNUSED)
+// import { DataSource } from 'typeorm'
+// import { logger } from './logger'
 
+// export const AppDataSource = new DataSource({...})
+
+export const AppDataSource = null
 export async function initializeDatabase() {
-  try {
-    await AppDataSource.initialize()
-    logger.info('✅ Database connected successfully')
-  } catch (error) {
-    logger.error('❌ Database connection failed:', error)
-    throw error
-  }
+  console.warn('⚠️  initializeDatabase() is deprecated. Use connectMongoDB() instead.')
 }

@@ -20,7 +20,10 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 // Middleware
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176').split(',')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(origin => origin.length > 0)
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -86,15 +89,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Connect to MongoDB then start server
 connectMongoDB()
   .then(() => {
-    app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`)
+    app.listen(PORT, '0.0.0.0', () => {
+      logger.info(`✅ Server running on port ${PORT}`)
     })
   })
   .catch((err) => {
-    logger.error('Failed to start - MongoDB connection error:', err)
+    logger.error('❌ MongoDB connection error:', err)
     // Start server anyway so health check works, routes will return 500
-    app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT} (MongoDB disconnected)`)
+    app.listen(PORT, '0.0.0.0', () => {
+      logger.warn(`⚠️  Server running on port ${PORT} (MongoDB disconnected)`)
     })
   })
 
