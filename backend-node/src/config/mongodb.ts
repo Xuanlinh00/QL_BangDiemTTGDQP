@@ -4,6 +4,13 @@ import { logger } from './logger'
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/tvu_documents?authSource=admin'
 
 export async function connectMongoDB() {
+  // Skip MongoDB if URI not configured
+  if (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost')) {
+    logger.warn('MongoDB URI not configured or using localhost - skipping MongoDB connection')
+    logger.warn('Some features requiring MongoDB will not work')
+    return
+  }
+
   try {
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 15000,
@@ -22,6 +29,7 @@ export async function connectMongoDB() {
     })
   } catch (err) {
     logger.error('MongoDB initial connection failed:', err)
-    throw err
+    logger.warn('Continuing without MongoDB - some features will not work')
+    // Don't throw - allow server to start
   }
 }

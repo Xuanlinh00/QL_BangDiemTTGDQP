@@ -91,10 +91,10 @@ connectMongoDB()
     })
   })
   .catch((err) => {
-    logger.error('Failed to start - MongoDB connection error:', err)
-    // Start server anyway so health check works, routes will return 500
+    logger.error('Failed to connect MongoDB:', err)
+    // Start server anyway - MongoDB is optional for some features
     app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT} (MongoDB disconnected)`)
+      logger.info(`Server running on port ${PORT} (MongoDB not connected)`)
     })
   })
 
