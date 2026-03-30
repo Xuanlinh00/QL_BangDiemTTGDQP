@@ -33,56 +33,6 @@ services:
     networks:
       - tvu_network
 
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: tvu_gdqp_admin
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend-node/src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d tvu_gdqp_admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - tvu_network
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@tvu.edu.vn
-      PGADMIN_DEFAULT_PASSWORD: password
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'False'
-      PGADMIN_CONFIG_COOKIE_DEFAULT_SECURE: 'False'
-      PGADMIN_CONFIG_COOKIE_SAMESITE: 'Lax'
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - tvu_network
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - tvu_network
-
   # Backend Services
   backend-node:
     build:
@@ -93,14 +43,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: password
-      DB_NAME: tvu_gdqp_admin
       MONGODB_URI: mongodb://admin:password@mongodb:27017/tvu_documents?authSource=admin
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
       CORS_ORIGINS: http://localhost,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176
       PYTHON_WORKER_URL: http://backend-python:8000
@@ -108,11 +51,7 @@ services:
       - ./backend-node/uploads:/app/uploads
       - backend_node_logs:/app/logs
     depends_on:
-      postgres:
-        condition: service_healthy
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
@@ -165,8 +104,6 @@ services:
 
 volumes:
   mongodb_data:
-  postgres_data:
-  pgadmin_data:
   backend_node_logs:
 
 networks:
