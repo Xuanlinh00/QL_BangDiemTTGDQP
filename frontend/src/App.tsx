@@ -13,6 +13,7 @@ import Settings from './pages/Settings'
 import About from './pages/About'
 import PublicAbout from './pages/PublicAbout'
 import CertificateIssuance from './pages/Certificates'
+import TVUExtract from './pages/TVUExtract'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="certificates" element={<CertificateIssuance />} />
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
+              <Route path="tvu-extract" element={<TVUExtract />} />
               {/* Báo cáo đã bị loại bỏ */}
               <Route path="settings" element={<Settings />} />
             </Route>

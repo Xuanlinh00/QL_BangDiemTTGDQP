@@ -1,5 +1,6 @@
 """Application configuration using environment variables."""
 
+import os
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,4 +44,8 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\tt\backend-python\google-credentials.json"
+
+# Set Google credentials path if file exists
+google_creds_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "google-credentials.json")
+if os.path.exists(google_creds_path):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_creds_path

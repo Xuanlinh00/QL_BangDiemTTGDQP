@@ -641,7 +641,6 @@ export default function About() {
                 <div className="p-5 pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
-                      <span className="text-3xl flex-shrink-0">{activity.icon}</span>
                       <div className="min-w-0">
                         <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">
                           {activity.title}
@@ -847,7 +846,6 @@ export default function About() {
                     </button>
                   </div>
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl grayscale">{activity.icon}</span>
                     <div>
                       <h4 className="text-sm font-bold text-gray-500 dark:text-slate-400">
                         {activity.title}
@@ -1049,7 +1047,7 @@ export default function About() {
           <div className="border-t border-gray-800 pt-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <p className="text-gray-400 text-sm">
-                © 2024 Trung tâm Giáo dục Quốc phòng và An ninh. Tất cả quyền được bảo lưu.
+                © 2025 Trung tâm Giáo dục Quốc phòng và An ninh. Tất cả quyền được bảo lưu.
               </p>
               <div className="flex gap-4">
                 <a href="#" className="text-gray-400 hover:text-white transition-colors">
@@ -1240,9 +1238,7 @@ function ActivityModal({
   onSave: (data: Partial<Activity>, files?: File[], removeMedia?: number[]) => void
 }) {
   const [title, setTitle] = useState(activity?.title || '')
-  const [description, setDescription] = useState(activity?.description || '')
   const [content, setContent] = useState(activity?.content || '')
-  const [icon, setIcon] = useState(activity?.icon || '📋')
   const [category, setCategory] = useState(activity?.category || 'general')
   const [order, setOrder] = useState(activity?.order ?? 0)
   const [isActive, setIsActive] = useState(activity?.isActive ?? true)
@@ -1276,7 +1272,7 @@ function ActivityModal({
   const handleSubmit = () => {
     if (!title.trim()) return
     onSave(
-      { title: title.trim(), description: description.trim(), content: content.trim(), icon, category, order, isActive },
+      { title: title.trim(), content: content.trim(), category, order, isActive },
       newFiles.length > 0 ? newFiles : undefined,
       removeIndices.length > 0 ? removeIndices : undefined
     )
@@ -1298,29 +1294,6 @@ function ActivityModal({
         </div>
 
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Icon */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-              Biểu tượng
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {ICON_OPTIONS.map(ic => (
-                <button
-                  key={ic}
-                  type="button"
-                  onClick={() => setIcon(ic)}
-                  className={`w-10 h-10 text-xl flex items-center justify-center rounded-xl border-2 transition-all ${
-                    icon === ic
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30 scale-110'
-                      : 'border-gray-200 dark:border-slate-600 hover:border-gray-300'
-                  }`}
-                >
-                  {ic}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Title */}
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
@@ -1331,20 +1304,6 @@ function ActivityModal({
               onChange={e => setTitle(e.target.value)}
               placeholder="VD: Đào tạo GDQP-AN"
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-              Mô tả ngắn
-            </label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={2}
-              placeholder="Tóm tắt nội dung..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
             />
           </div>
 
@@ -1421,14 +1380,13 @@ function ActivityModal({
             {existingMedia.length > 0 && (
               <div className="mt-3">
                 <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">
-                  Media hiện có (nhấn để đánh dấu xóa):
+                  Media hiện có:
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {existingMedia.map((m: MediaItem, idx: number) => (
                     <div
                       key={m._id || idx}
-                      onClick={() => toggleRemoveExisting(idx)}
-                      className={`relative w-20 h-20 rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${
+                      className={`relative w-20 h-20 rounded-lg border-2 overflow-hidden group transition-all ${
                         removeIndices.includes(idx)
                           ? 'border-red-500 opacity-40'
                           : 'border-gray-200 dark:border-slate-600'
@@ -1445,8 +1403,19 @@ function ActivityModal({
                           className="w-full h-full object-cover"
                         />
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleRemoveExisting(idx)
+                        }}
+                        className="absolute top-0.5 right-0.5 z-10 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        title={removeIndices.includes(idx) ? 'Hủy xóa' : 'Xóa'}
+                      >
+                        ×
+                      </button>
                       {removeIndices.includes(idx) && (
-                        <div className="absolute inset-0 bg-red-500/30 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-red-500/30 flex items-center justify-center pointer-events-none">
                           <svg
                             className="w-6 h-6 text-red-600"
                             fill="none"

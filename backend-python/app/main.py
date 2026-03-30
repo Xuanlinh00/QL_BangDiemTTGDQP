@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database.mongodb import close_connection, create_indexes
-from app.routes import documentai, export, extract, ocr, ocr_advanced, reconcile
+from app.routes import documentai, export, extract, ocr, ocr_advanced, reconcile, tvu_extract
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +44,7 @@ app.include_router(reconcile.router, prefix="/reconcile", tags=["Reconcile"])
 app.include_router(documentai.router, prefix="/documentai", tags=["Document AI"])
 app.include_router(export.router, prefix="/export", tags=["Export"])
 app.include_router(ocr_advanced.router, prefix="/ocr-advanced", tags=["OCR Advanced"])
+app.include_router(tvu_extract.router, tags=["TVU Extraction"])
 
 
 @app.get("/health")

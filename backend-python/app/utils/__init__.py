@@ -18,7 +18,6 @@ from .ocr_processor import (
     TextRegion,
     OCRResult,
     SimpleImageProcessor,
-    TextDetector,
     TableDetectorAdvanced,
     OCRProcessor,
     BatchOCRProcessor
@@ -47,7 +46,6 @@ __all__ = [
     'TextRegion',
     'OCRResult',
     'SimpleImageProcessor',
-    'TextDetector',
     'TableDetectorAdvanced',
     'OCRProcessor',
     'BatchOCRProcessor',
