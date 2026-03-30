@@ -4,7 +4,7 @@
 
 - [ ] Test build local: Chạy `test-build.bat` (Windows) hoặc `bash test-build.sh` (Linux/Mac)
 - [ ] Build thành công không có lỗi TypeScript
-- [ ] Commit tất cả thay đổi
+- [ ] Commit tất cả thay đổi (đặc biệt là package.json và render.yaml)
 - [ ] Push lên GitHub
 
 ## MongoDB Atlas Setup
@@ -18,10 +18,12 @@
 
 ## Render Backend Node Setup
 
-### Build Settings
-- [ ] Root Directory: `backend-node` (hoặc để trống)
-- [ ] Build Command: `cd backend-node && npm install --include=dev && npm run build`
-- [ ] Start Command: `cd backend-node && npm start`
+### Build Settings (Không cần thay đổi nếu dùng render.yaml)
+- [ ] Service đã được tạo từ render.yaml
+- [ ] Hoặc manual setup:
+  - Root Directory: để trống
+  - Build Command: `cd backend-node && npm ci && npm run build`
+  - Start Command: `cd backend-node && npm start`
 
 ### Environment Variables
 - [ ] `NODE_ENV` = `production`

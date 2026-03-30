@@ -19,9 +19,11 @@ services:
   # Backend Node.js
   - type: web
     name: tvu-backend-node
-    env: docker
-    dockerfilePath: ./backend-node/Dockerfile
+    env: node
+    region: singapore
     plan: free
+    buildCommand: cd backend-node && npm install && npm run build
+    startCommand: cd backend-node && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

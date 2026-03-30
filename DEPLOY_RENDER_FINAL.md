@@ -5,22 +5,27 @@
 1. **MongoDB optional**: Backend có thể chạy mà không cần MongoDB
 2. **Middleware protection**: Tất cả routes cần MongoDB đều có middleware kiểm tra
 3. **Graceful degradation**: Server trả về 503 khi MongoDB chưa kết nối thay vì crash
+4. **TypeScript dependencies**: Di chuyển types và compiler sang dependencies để build thành công
 
 ## 🚀 Các bước deploy
 
-### Bước 1: Fix lỗi TypeScript Build
+### Bước 0: Commit code mới
 
-Trong Render Dashboard → Service **tvu-backend-node**:
-
-#### Option A: Đổi Build Command (Khuyên dùng)
 ```bash
-cd backend-node && npm install --include=dev && npm run build
+git add .
+git commit -m "fix: prepare for Render deployment"
+git push
 ```
 
-#### Option B: Thêm Environment Variable cho Build
-Thêm biến:
-- Key: `NPM_CONFIG_PRODUCTION`
-- Value: `false`
+### Bước 1: Render sẽ tự động build
+
+Sau khi push, Render sẽ:
+- Tự động detect commit mới
+- Chạy `npm ci` (cài tất cả dependencies)
+- Chạy `npm run build` (TypeScript compile)
+- Start server
+
+**Không cần thay đổi Build Command nữa!**
 
 ### Bước 2: Setup MongoDB Atlas (5 phút)
 
