@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { Student, Score } from '../models'
+import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
+
+// All data routes require MongoDB
+router.use(requireMongoDB)
 
 // ═══════════════════════════════════
 // STUDENTS

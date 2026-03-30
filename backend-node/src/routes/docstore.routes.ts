@@ -2,8 +2,12 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import mongoose from 'mongoose'
 import { DocumentModel, StudentRecord } from '../models'
+import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
+
+// All docstore routes require MongoDB
+router.use(requireMongoDB)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }) // 500MB limit
 
 // ── Initialize GridFS buckets ──

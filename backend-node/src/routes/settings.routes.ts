@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { Setting } from '../models'
+import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
+
+// All settings routes require MongoDB
+router.use(requireMongoDB)
 
 // Default settings to seed on first load
 const DEFAULT_SETTINGS = [

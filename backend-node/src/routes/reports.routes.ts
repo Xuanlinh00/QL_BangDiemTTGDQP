@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { Report } from '../models'
+import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
+
+// All report routes require MongoDB
+router.use(requireMongoDB)
 
 router.get('/', async (_req: Request, res: Response) => {
   try {

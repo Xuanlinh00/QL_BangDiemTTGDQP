@@ -3,8 +3,12 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import { DecisionFile, DecisionFolder } from '../models'
+import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
+
+// All decision routes require MongoDB
+router.use(requireMongoDB)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
 // ── File storage on local disk ──

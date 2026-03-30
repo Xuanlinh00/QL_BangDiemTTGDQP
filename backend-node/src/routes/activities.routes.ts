@@ -4,8 +4,18 @@ import path from 'path'
 import fs from 'fs'
 import { CenterActivity } from '../models'
 import { authMiddleware } from '../middleware/auth.middleware'
+import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
+
+// MongoDB check for all routes except public ones
+const publicPaths = ['/', '/seed']
+router.use((req, res, next) => {
+  if (publicPaths.includes(req.path) || req.path.match(/^\/[^/]+\/media\/\d+$/)) {
+    return requireMongoDB(req, res, next)
+  }
+  requireMongoDB(req, res, next)
+})
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
 // ── Media storage on local disk ──
