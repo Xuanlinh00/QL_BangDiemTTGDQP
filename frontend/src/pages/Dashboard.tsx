@@ -84,7 +84,7 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadMetrics() {
       try {
-        const res = await api.get('/api/metrics')
+        const res = await api.get('/dashboard/metrics')
         setMetrics(res.data.data)
       } catch (e) {
         console.error('Failed to load metrics:', e)

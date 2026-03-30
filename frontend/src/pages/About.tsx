@@ -159,8 +159,8 @@ export default function About() {
     [editingActivity]
   )
 
-  const activeActivities = activities.filter(a => a.isActive && a.category !== 'banner')
-  const inactiveActivities = activities.filter(a => !a.isActive && a.category !== 'banner')
+  const activeActivities = activities.filter(a => a.isActive && a.category !== 'banner' && a.category !== 'introduction')
+  const inactiveActivities = activities.filter(a => !a.isActive && a.category !== 'banner' && a.category !== 'introduction')
   const filtered =
     filterCategory === 'all'
       ? activeActivities
@@ -433,13 +433,132 @@ export default function About() {
               <p className="text-lg text-gray-700 dark:text-slate-300 mb-4 leading-relaxed">
                 {introductionData.content}
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                {introductionData.stats.map((stat, idx) => (
-                  <div key={idx} className="bg-white dark:bg-slate-700 rounded-lg p-4">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stat.value}</div>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">{stat.label}</p>
-                  </div>
-                ))}
+              
+              {/* Media upload section */}
+              <div className="mt-6 space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Hình ảnh & Video</h3>
+                <div className="flex flex-wrap gap-3">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors cursor-pointer shadow-sm">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Upload Hình ảnh
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || [])
+                        if (files.length === 0) return
+                        try {
+                          // Create introduction activity if not exists
+                          let introActivity = activities.find(a => a.category === 'introduction')
+                          if (!introActivity) {
+                            const res = await activitiesApi.create({
+                              title: 'Giới thiệu',
+                              description: 'Hình ảnh và video giới thiệu',
+                              category: 'introduction',
+                              icon: '📸',
+                              isActive: true,
+                              order: 0,
+                            }, files)
+                            setActivities(prev => [...prev, res.data.data])
+                          } else {
+                            const res = await activitiesApi.update(introActivity._id, {}, files)
+                            setActivities(prev => prev.map(a => a._id === introActivity._id ? res.data.data : a))
+                          }
+                        } catch (err: any) {
+                          alert('Upload thất bại: ' + (err.response?.data?.error?.message || err.message))
+                        }
+                        e.target.value = ''
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors cursor-pointer shadow-sm">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Upload Video
+                    <input
+                      type="file"
+                      accept="video/*"
+                      multiple
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || [])
+                        if (files.length === 0) return
+                        try {
+                          let introActivity = activities.find(a => a.category === 'introduction')
+                          if (!introActivity) {
+                            const res = await activitiesApi.create({
+                              title: 'Giới thiệu',
+                              description: 'Hình ảnh và video giới thiệu',
+                              category: 'introduction',
+                              icon: '📸',
+                              isActive: true,
+                              order: 0,
+                            }, files)
+                            setActivities(prev => [...prev, res.data.data])
+                          } else {
+                            const res = await activitiesApi.update(introActivity._id, {}, files)
+                            setActivities(prev => prev.map(a => a._id === introActivity._id ? res.data.data : a))
+                          }
+                        } catch (err: any) {
+                          alert('Upload thất bại: ' + (err.response?.data?.error?.message || err.message))
+                        }
+                        e.target.value = ''
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                
+                {/* Display uploaded media */}
+                {(() => {
+                  const introActivity = activities.find(a => a.category === 'introduction')
+                  if (!introActivity || !introActivity.media?.length) return null
+                  return (
+                    <div className="mt-4 space-y-4">
+                      {introActivity.media.map((m, idx) => {
+                        const url = activitiesApi.getMediaUrl(introActivity._id, idx)
+                        const isVideo = m.mimeType.startsWith('video/')
+                        return (
+                          <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-300 dark:border-slate-600 bg-gray-100 dark:bg-slate-900 group w-full hover:shadow-lg transition-shadow">
+                            {isVideo ? (
+                              <video src={url} className="w-full h-auto max-h-96 object-contain" />
+                            ) : (
+                              <img src={url} alt={m.fileName} className="w-full h-auto max-h-96 object-contain" />
+                            )}
+                            {isVideo && (
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center pointer-events-none">
+                                <svg className="w-16 h-16 text-white opacity-70 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Xóa media này?')) return
+                                try {
+                                  const res = await activitiesApi.update(introActivity._id, {}, [], [idx])
+                                  setActivities(prev => prev.map(a => a._id === introActivity._id ? res.data.data : a))
+                                } catch (err: any) {
+                                  alert('Xóa thất bại: ' + (err.response?.data?.error?.message || err.message))
+                                }
+                              }}
+                              className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
             <button
