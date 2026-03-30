@@ -9,10 +9,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # Database
-    DATABASE_URL: str = "postgresql://localhost:5432/tvu_gdqp_admin"
+    # MongoDB (Only Database)
     MONGODB_URL: str = "mongodb://localhost:27017"
-    MONGODB_DB_NAME: str = "tvu_gdqp"
+    MONGODB_DB_NAME: str = "tvu_documents"
 
     # API Keys (should be in .env file)
     GEMINI_API_KEY: str = ""
@@ -33,9 +32,10 @@ class Settings(BaseSettings):
     GOOGLE_CLOUD_LOCATION: str = "us"
     DOCUMENTAI_PROCESSOR_ID: Optional[str] = None
 
-    # API Server
+    # API Server - support PORT env variable (used by Render)
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
+    PORT: int = 8000  # Render standard env variable
 
     model_config = SettingsConfigDict(
         env_file=".env",
