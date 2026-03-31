@@ -82,7 +82,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://tvu-backend-node.onrender.com/api
+        value: https://tvu-backend-node1.onrender.com/api
       - key: VITE_PYTHON_API_URL
         value: https://tvu-backend-python.onrender.com
       - key: VITE_APP_NAME
