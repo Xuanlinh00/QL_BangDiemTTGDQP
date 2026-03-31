@@ -1,35 +1,29 @@
-# ── Khởi động backend Python (OCR + Document AI + Vision API) ─────────────────
-Set-Location "$PSScriptRoot\backend-python"
+# ── Khởi động backend Node.js ─────────────────
+Set-Location "$PSScriptRoot\backend-node"
 
-# Kiểm tra Python
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Error "Python chưa được cài. Tải tại https://www.python.org/downloads/"
+# Kiểm tra Node.js
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Error "Node.js chưa được cài. Tải tại https://nodejs.org/"
     exit 1
 }
 
-# Tạo virtualenv nếu chưa có
-if (-not (Test-Path ".venv")) {
-    Write-Host "Tạo virtualenv..." -ForegroundColor Cyan
-    python -m venv .venv
+# Cài dependencies nếu chưa có
+if (-not (Test-Path "node_modules")) {
+    Write-Host "Cài dependencies..." -ForegroundColor Cyan
+    npm install
 }
-
-# Activate
-.\.venv\Scripts\Activate.ps1
-
-# Cài dependencies
-Write-Host "Cài dependencies..." -ForegroundColor Cyan
-pip install -r requirements.txt -q
 
 # Kiểm tra file .env
 if (-not (Test-Path ".env")) {
-    Copy-Item ".env.example" ".env"
-    Write-Warning "File .env đã được tạo từ .env.example. Hãy điền GOOGLE_CLOUD_PROJECT_ID, DOCUMENTAI_PROCESSOR_ID, GOOGLE_APPLICATION_CREDENTIALS."
+    if (Test-Path ".env.example") {
+        Copy-Item ".env.example" ".env"
+        Write-Warning "File .env đã được tạo từ .env.example. Hãy cấu hình các biến môi trường cần thiết."
+    }
 }
 
 # Khởi động
 Write-Host ""
-Write-Host "✅ Đang khởi động backend tại http://localhost:8000 ..." -ForegroundColor Green
-Write-Host "   API docs: http://localhost:8000/docs" -ForegroundColor Green
+Write-Host "✅ Đang khởi động backend tại http://localhost:3000 ..." -ForegroundColor Green
 Write-Host "   Dừng: Ctrl+C" -ForegroundColor Yellow
 Write-Host ""
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+npm run dev

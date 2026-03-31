@@ -11,12 +11,12 @@ router.get('/metrics', (req, res) => {
     data: {
       total_documents: 550,
       total_pages: 43000,
-      ocr_completed_percent: 65,
+      documents_completed_percent: 65,
       documents_pending: 120,
       documents_error: 15,
       decisions_count: 42,
       alerts: [
-        '15 file OCR bị lỗi, cần xử lý lại',
+        '15 file bị lỗi, cần xử lý lại',
       ],
     },
   })

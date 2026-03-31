@@ -22,7 +22,7 @@ export interface Document {
   folder: string
   type: 'DSGD' | 'QD' | 'BieuMau'
   pages: number
-  ocr_status: 'Pending' | 'Processing' | 'Completed' | 'Error'
+  status: 'Pending' | 'Processing' | 'Completed' | 'Error'
   extract_status: 'Pending' | 'Processing' | 'Completed' | 'Error'
   file_path_s3: string
   uploaded_by: string
@@ -45,7 +45,7 @@ export interface Decision {
 export interface DashboardMetrics {
   total_documents: number
   total_pages: number
-  ocr_completed_percent: number
+  documents_completed_percent: number
   documents_pending: number
   documents_error: number
   decisions_count: number

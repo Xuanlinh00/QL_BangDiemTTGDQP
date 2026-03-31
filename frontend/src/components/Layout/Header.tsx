@@ -1,19 +1,31 @@
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+
+const PAGE_TITLES: Record<string, string> = {
+  '/': 'Trang chủ',
+  '/about': 'Trang chủ',
+  '/documents': 'Quản lý Bảng điểm',
+  '/decisions': 'Quản lý Quyết định',
+  '/certificates': 'Quản lý Cấp chứng chỉ',
+  '/activities': 'Quản lý Hoạt động',
+  '/settings': 'Cài đặt',
+}
 
 export default function Header() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const [notifications, setNotifications] = useState([
-    { id: 1, message: 'OCR hoàn tất xử lý file bảng điểm', time: 'Vừa xong', read: false },
+    { id: 1, message: 'Xử lý file bảng điểm hoàn tất', time: 'Vừa xong', read: false },
   ])
 
   const unreadCount = notifications.filter(n => !n.read).length
+  const pageTitle = PAGE_TITLES[location.pathname] || 'Hệ thống quản lý GDQP-AN'
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -33,7 +45,7 @@ export default function Header() {
       {/* Left: Title */}
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-bold text-primary-900 dark:text-white">
-          Hệ thống quản lý GDQP-AN
+          {pageTitle}
         </h1>
       </div>
 

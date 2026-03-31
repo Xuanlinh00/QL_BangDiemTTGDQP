@@ -18,7 +18,20 @@ interface Activity {
   order: number
   isActive: boolean
   media: MediaItem[]
+  previewImage?: string // For localStorage preview
   createdAt?: string
+}
+
+// LocalStorage helpers
+const LOCAL_STORAGE_KEY = 'local_activities'
+
+function getLocalActivities(): Activity[] {
+  try {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY)
+    return data ? JSON.parse(data) : []
+  } catch {
+    return []
+  }
 }
 
 const CATEGORY_OPTIONS = [
@@ -68,16 +81,41 @@ export default function PublicActivityDetail() {
   useEffect(() => {
     const loadActivity = async () => {
       try {
+        // Check local storage first for local activities
+        if (id?.startsWith('local_')) {
+          const localActivities = getLocalActivities()
+          const found = localActivities.find(a => a._id === id)
+          if (found) {
+            setActivity(found)
+            setLoading(false)
+            return
+          }
+        }
+        
         const res = await activitiesApi.list()
         const found = res.data.data?.find((a: Activity) => a._id === id)
         if (found) {
           setActivity(found)
         } else {
-          navigate('/gioi-thieu')
+          // Try local storage as fallback
+          const localActivities = getLocalActivities()
+          const localFound = localActivities.find(a => a._id === id)
+          if (localFound) {
+            setActivity(localFound)
+          } else {
+            navigate('/gioi-thieu')
+          }
         }
       } catch (error) {
         console.error('Error loading activity:', error)
-        navigate('/gioi-thieu')
+        // Try local storage as fallback
+        const localActivities = getLocalActivities()
+        const localFound = localActivities.find(a => a._id === id)
+        if (localFound) {
+          setActivity(localFound)
+        } else {
+          navigate('/gioi-thieu')
+        }
       } finally {
         setLoading(false)
       }
@@ -162,9 +200,21 @@ export default function PublicActivityDetail() {
         {/* Content */}
         {activity.content && (
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-gray-200 dark:border-slate-700 shadow-sm mb-8">
-            <div className="text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-              {activity.content}
-            </div>
+            <div 
+              className="text-gray-700 dark:text-slate-300 leading-relaxed prose prose-lg max-w-none dark:prose-invert"
+              dangerouslySetInnerHTML={{ __html: activity.content }}
+            />
+          </div>
+        )}
+
+        {/* Preview Image for local activities */}
+        {activity.previewImage && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-gray-200 dark:border-slate-700 shadow-sm mb-8">
+            <img 
+              src={activity.previewImage} 
+              alt={activity.title}
+              className="w-full h-auto rounded-xl"
+            />
           </div>
         )}
 

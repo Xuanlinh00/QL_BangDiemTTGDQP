@@ -48,8 +48,8 @@ export const schemas = {
     uploaded_at: Joi.string().isoDate().default(() => new Date().toISOString()),
   }),
 
-  // OCR request
-  ocrRequest: Joi.object({
+  // Document processing request
+  processRequest: Joi.object({
     raw_text: Joi.string().max(1000000), // 1MB text limit
     document_type: Joi.string().valid('DSGD', 'QD', 'BieuMau'),
   }),

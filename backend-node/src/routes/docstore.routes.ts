@@ -47,7 +47,7 @@ router.post('/upload', upload.array('files', 20), async (req: Request, res: Resp
         folder: folder || '',
         type: type || '',
         pages: 0,
-        ocr_status: 'N/A',
+        status: 'Pending',
         extract_status: 'Pending',
         uploaded_at: new Date().toISOString().split('T')[0],
         source: 'local',

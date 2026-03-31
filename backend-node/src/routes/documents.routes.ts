@@ -2,14 +2,11 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { validate, schemas } from '../middleware/validation.middleware'
 import { uploadLimiter } from '../middleware/rate-limiter.middleware'
-import axios from 'axios'
 import ExcelJS from 'exceljs'
 import path from 'path'
 
 const router = Router()
 router.use(authMiddleware)
-
-const PYTHON_WORKER = process.env.PYTHON_WORKER_URL || 'http://localhost:8000'
 
 // ── In-memory document store (replace with MongoDB in production) ──
 interface StudentRecord {
@@ -29,7 +26,7 @@ interface DocumentMeta {
   folder: string
   type: string
   source: string
-  ocr_status: string
+  status: string
   extract_status: string
   uploaded_at: string
   raw_text?: string
@@ -63,7 +60,7 @@ router.post('/register', uploadLimiter, validate(schemas.registerDocument), (req
     folder,
     type,
     source,
-    ocr_status: 'Pending',
+    status: 'Pending',
     extract_status: 'Pending',
     uploaded_at,
   }
@@ -72,10 +69,10 @@ router.post('/register', uploadLimiter, validate(schemas.registerDocument), (req
 })
 
 // ─────────────────────────────────────────────
-// POST /api/documents/:id/ocr
-// Trigger OCR via Python worker (raw_text in body OR multipart)
+// POST /api/documents/:id/process
+// Process document text (store raw_text)
 // ─────────────────────────────────────────────
-router.post('/:id/ocr', async (req: Request, res: Response) => {
+router.post('/:id/process', async (req: Request, res: Response) => {
   const docId = req.params.id
   const { raw_text, document_type } = req.body
 
@@ -84,62 +81,47 @@ router.post('/:id/ocr', async (req: Request, res: Response) => {
     _docs.set(docId, {
       id: docId, name: docId, folder: 'Upload',
       type: document_type || 'DSGD', source: 'local',
-      ocr_status: 'Processing', extract_status: 'Pending',
+      status: 'Processing', extract_status: 'Pending',
       uploaded_at: new Date().toISOString().split('T')[0],
     })
   } else {
-    _docs.get(docId)!.ocr_status = 'Processing'
+    _docs.get(docId)!.status = 'Processing'
   }
 
   try {
-    let ocrText = raw_text
-
-    if (!ocrText) {
-      // Delegate to Python worker /ocr/process-text with empty placeholder
-      const resp = await axios.post(`${PYTHON_WORKER}/ocr/process-text`, {
-        document_id: docId,
-        raw_text: '',
-        document_type: document_type || 'DSGD',
-      })
-      ocrText = resp.data.raw_text || ''
-    }
-
     const doc = _docs.get(docId)!
-    doc.raw_text = ocrText
-    doc.ocr_status = 'Completed'
+    doc.raw_text = raw_text || ''
+    doc.status = 'Completed'
 
-    res.json({ success: true, task_id: `ocr_${docId}`, raw_text: ocrText })
+    res.json({ success: true, task_id: `process_${docId}`, raw_text: doc.raw_text })
   } catch (err: unknown) {
     const doc = _docs.get(docId)
-    if (doc) doc.ocr_status = 'Error'
-    const msg = err instanceof Error ? err.message : 'OCR failed'
+    if (doc) doc.status = 'Error'
+    const msg = err instanceof Error ? err.message : 'Processing failed'
     res.status(500).json({ success: false, error: msg })
   }
 })
 
 // ─────────────────────────────────────────────
 // POST /api/documents/:id/extract
-// Parse raw_text into structured records via Python worker
+// Parse raw_text into structured records
 // ─────────────────────────────────────────────
 router.post('/:id/extract', async (req: Request, res: Response) => {
   const docId = req.params.id
-  const { raw_text, document_type } = req.body
+  const { raw_text, document_type, records: inputRecords, meta: inputMeta } = req.body
 
-  if (!raw_text) {
-    res.status(400).json({ success: false, error: 'raw_text is required' })
+  if (!raw_text && !inputRecords) {
+    res.status(400).json({ success: false, error: 'raw_text or records is required' })
     return
   }
 
   if (_docs.has(docId)) _docs.get(docId)!.extract_status = 'Processing'
 
   try {
-    const resp = await axios.post(`${PYTHON_WORKER}/extract/parse-document`, {
-      document_id: docId,
-      raw_text,
-      document_type: document_type || 'DSGD',
-    })
-
-    const { records, meta } = resp.data
+    // If records are directly provided, use them
+    const records = inputRecords || []
+    const meta = inputMeta || {}
+    
     const doc = _docs.get(docId)
     if (doc) {
       doc.records = records
@@ -147,7 +129,7 @@ router.post('/:id/extract', async (req: Request, res: Response) => {
       doc.extract_status = 'Completed'
     }
 
-    res.json({ success: true, records, meta, warnings: resp.data.warnings })
+    res.json({ success: true, records, meta, warnings: [] })
   } catch (err: unknown) {
     if (_docs.has(docId)) _docs.get(docId)!.extract_status = 'Error'
     const msg = err instanceof Error ? err.message : 'Extract failed'
@@ -211,7 +193,7 @@ router.get('/export/excel', async (req: Request, res: Response) => {
     { header: 'Loại', key: 'type', width: 12 },
     { header: 'Nguồn', key: 'source', width: 12 },
     { header: 'Ngày upload', key: 'uploaded_at', width: 16 },
-    { header: 'Trạng thái OCR', key: 'ocr_status', width: 16 },
+    { header: 'Trạng thái', key: 'status', width: 16 },
     { header: 'Trạng thái Extract', key: 'extract_status', width: 18 },
     { header: 'Số bản ghi', key: 'record_count', width: 12 },
     { header: 'Điểm TB', key: 'diem_tb', width: 10 },
@@ -226,7 +208,7 @@ router.get('/export/excel', async (req: Request, res: Response) => {
       type: doc.type,
       source: doc.source,
       uploaded_at: doc.uploaded_at,
-      ocr_status: doc.ocr_status,
+      status: doc.status,
       extract_status: doc.extract_status,
       record_count: doc.records?.length ?? 0,
       diem_tb: m?.diem_trung_binh ?? '',

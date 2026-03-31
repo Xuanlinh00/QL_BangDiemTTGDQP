@@ -143,7 +143,7 @@ export interface IDocument extends MongoDocument {
   folder: string
   type: string
   pages: number
-  ocr_status: string
+  status: string
   extract_status: string
   uploaded_at: string
   driveFileId?: string
@@ -163,7 +163,7 @@ const DocumentSchema = new Schema<IDocument>({
   folder: { type: String, default: '' },
   type: { type: String, default: '' },
   pages: { type: Number, default: 0 },
-  ocr_status: { type: String, default: 'N/A' },
+  status: { type: String, default: 'Pending' },
   extract_status: { type: String, default: 'Pending' },
   uploaded_at: { type: String, default: '' },
   driveFileId: { type: String },
@@ -180,7 +180,7 @@ const DocumentSchema = new Schema<IDocument>({
 
 export const DocumentModel = mongoose.model<IDocument>('Document', DocumentSchema)
 
-// ── Student Record (extracted from OCR in Documents page) ──
+// ── Student Record (extracted from Documents page) ──
 export interface IStudentRecord extends MongoDocument {
   docId: string
   docName: string

@@ -21,29 +21,8 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: https://tvu-frontend.onrender.com,https://tvu-backend-node.onrender.com,http://localhost:5173
-      - key: PYTHON_WORKER_URL
-        value: https://tvu-backend-python.onrender.com
       - key: LOG_LEVEL
         value: info
-
-  # Backend Python
-  - type: web
-    name: tvu-backend-python
-    env: docker
-    dockerfilePath: ./backend-python/Dockerfile
-    plan: free
-    healthCheckPath: /health
-    envVars:
-      - key: MONGODB_URL
-        sync: false
-      - key: MONGODB_DB_NAME
-        value: tvu_documents
-      - key: TESSERACT_PATH
-        value: /usr/bin/tesseract
-      - key: OCR_LANGUAGE
-        value: vie
-      - key: API_HOST
-        value: 0.0.0.0
 
   # Frontend (Web Service with Docker)
   - type: web
@@ -55,7 +34,5 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://tvu-backend-node.onrender.com/api
-      - key: VITE_PYTHON_API_URL
-        value: https://tvu-backend-python.onrender.com
       - key: VITE_APP_NAME
         value: TVU GDQP-AN Admin Portal

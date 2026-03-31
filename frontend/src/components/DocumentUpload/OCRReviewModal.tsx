@@ -1,5 +1,5 @@
 /**
- * OCRReviewModal — Side-by-side PDF viewer + editable extracted data.
+ * PDFReviewModal — Side-by-side PDF viewer + editable extracted data.
  *
  * Layout:
  *   ┌─────────────────────────┬───────────────────────────┐
@@ -9,8 +9,8 @@
  *
  * Workflow:
  *   1. Parent provides a pdfUrl (blob URL or Drive embed URL)
- *      and the raw OCR text.
- *   2. This component calls the Python worker to parse the text.
+ *      and the raw text extracted from PDF.
+ *   2. This component parses the text client-side.
  *   3. User reviews / corrects each field inline.
  *   4. "Lưu xác nhận" emits the corrected records back to the parent.
  *   5. Parent can then call /export/excel to download the workbook.
@@ -54,17 +54,15 @@ interface Props {
   docName: string
   docId: string
   docType: 'DSGD' | 'QD' | 'BieuMau'
-  /** Raw OCR text already extracted client-side (optional).
-   *  When provided, the component skips OCR and goes straight to extraction. */
+  /** Raw text already extracted client-side (optional).
+   *  When provided, the component skips extraction and goes straight to parsing. */
   rawText?: string
   /** Local file blob — nếu có, modal sẽ tự đọc nội dung PDF ngay trong trình duyệt */
   fileBlob?: Blob | null
-  /** The Python worker base URL (default: http://localhost:8000) */
-  workerUrl?: string
   onSave?: (records: StudentRecord[], meta: ExtractMeta) => void
 }
 
-// ── OCR Demo text (used when no rawText is provided and worker unreachable) ──
+// ── Demo records (used when extraction returns empty) ──
 
 const DEMO_RECORDS: StudentRecord[] = [
   { stt: '1', ho_ten: 'Nguyễn Văn An',   mssv: 'DA210001', lop: 'DA21TYC', diem_qp: '7.5', diem_lan2: '', ket_qua: 'Đạt',       ghi_chu: '' },
@@ -79,36 +77,8 @@ const DEMO_RECORDS: StudentRecord[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// ── Module-level: tránh gọi backend lặp lại khi đã biết offline ─────────────
-// Dùng cả module var (nhanh, luôn hoạt động) + sessionStorage (sống qua HMR)
-const _SS_OFFLINE_KEY = 'tvu_backend_offline_ts'
-const BACKEND_RETRY_MS = 60_000
-let _moduleOfflineTs = 0   // reset khi HMR, nhưng sessionStorage sẽ khôi phục
-
-function isBackendKnownOffline(): boolean {
-  // Fast path: module var (trong cùng 1 JS module instance)
-  if (_moduleOfflineTs > 0 && Date.now() - _moduleOfflineTs < BACKEND_RETRY_MS) return true
-  // HMR-proof path: sessionStorage (nếu module var đã bị reset bởi HMR)
-  try {
-    const ts = Number(sessionStorage.getItem(_SS_OFFLINE_KEY) ?? 0)
-    if (ts > 0 && Date.now() - ts < BACKEND_RETRY_MS) {
-      _moduleOfflineTs = ts  // đồng bộ lại module var
-      return true
-    }
-  } catch { /* sessionStorage blocked (private mode): dùng module var */ }
-  return false
-}
-function markBackendOffline(): void {
-  _moduleOfflineTs = Date.now()
-  try { sessionStorage.setItem(_SS_OFFLINE_KEY, String(_moduleOfflineTs)) } catch { /* ignore */ }
-}
-function markBackendOnline(): void {
-  _moduleOfflineTs = 0
-  try { sessionStorage.removeItem(_SS_OFFLINE_KEY) } catch { /* ignore */ }
-}
-
 // ── Module-level: dedup xử lý file — sống qua HMR nhờ sessionStorage + module var ──
-const _SS_JOB_KEY = 'tvu_ocr_job'
+const _SS_JOB_KEY = 'tvu_pdf_job'
 const JOB_TTL_MS = 5 * 60_000
 let _currentJobId = ''   // module-level fast path
 function _blobJobId(blob: Blob): string {
@@ -635,7 +605,7 @@ function preprocessCanvasForOCR(canvas: HTMLCanvasElement): void {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function OCRReviewModal({
+export default function PDFReviewModal({
   isOpen,
   onClose,
   pdfUrl,
@@ -644,7 +614,6 @@ export default function OCRReviewModal({
   docType,
   rawText,
   fileBlob,
-  workerUrl = 'http://localhost:8000',
   onSave,
 }: Props) {
   const [step, setStep] = useState<'reading_pdf' | 'loading' | 'review' | 'saving' | 'done'>('reading_pdf')
@@ -694,128 +663,7 @@ export default function OCRReviewModal({
     setStep('review')
   }, [docType])
 
-  // ── Document AI / Vision API: gửi scanned PDF lên backend → OCR ──────────
-  const runDocumentAI = useCallback(async (blob: Blob) => {
-    setStep('loading')
-    // Nếu đã biết backend offline, bỏ qua tất cả network call
-    if (isBackendKnownOffline()) {
-      await runTesseractFallback(blob)
-      return
-    }
-    try {
-      const formData = new FormData()
-      formData.append('file', blob, docName || 'document.pdf')
-      formData.append('document_type', docType)
-      formData.append('document_id', docId)
-
-      // Thử Vision API handwriting endpoint trước (nhanh hơn, hỗ trợ chữ viết tay)
-      // Nếu không cấu hình GOOGLE_APPLICATION_CREDENTIALS → fallback Document AI
-      let resp: Response
-      let endpointUsed = 'vision'
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 90000)
-
-      try {
-        setReadProgress('📡 Đang gửi lên Google Vision API (hỗ trợ cả chữ viết tay)...')
-        resp = await fetch(`${workerUrl}/ocr/process-handwriting`, {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-        })
-        if (!resp.ok) throw new Error(`Vision HTTP ${resp.status}`)
-      } catch (visionErr) {
-        // Vision API thất bại (bất kỳ lý do gì: network / HTTP / credentials)
-        // → cả Document AI cũng trên cùng server → mark offline ngay → Tesseract
-        clearTimeout(timeout)
-        markBackendOffline()
-        await runTesseractFallback(blob)
-        return
-      }
-      clearTimeout(timeout)
-
-      const data = await resp.json()
-      const rawText: string = data.raw_text || ''
-      setRawOcrText(rawText)
-
-      if (endpointUsed === 'vision') {
-        // Vision API trả về raw_text trực tiếp → parse thành records
-        setReadProgress(`✅ Google Vision OCR: ${rawText.length} ký tự · ${data.page_count ?? 1} trang`)
-        toast.success(`Vision API OCR thành công! Đọc được ${rawText.length} ký tự (hỗ trợ chữ viết tay).`)
-        if (rawText.trim()) {
-          await runExtract(rawText)
-          return
-        }
-      } else {
-        setReadProgress(`✅ Document AI: ${data.entities?.length ?? 0} trường · ${data.tables?.length ?? 0} bảng`)
-        toast.success(`Document AI OCR thành công! ${data.entities?.length ?? 0} trường được nhận dạng`)
-      }
-
-      // Nếu Document AI trả về bảng → map trực tiếp ra records
-      const tables: Array<{ headers: string[]; rows: Array<{ cells: string[] }> }> = data.tables || []
-      if (tables.length > 0) {
-        const firstTable = tables[0]
-        const headers = firstTable.headers.map((h: string) => h.toLowerCase().trim())
-        const findIdx = (...candidates: string[]) =>
-          candidates.reduce((found, c) => found >= 0 ? found : headers.findIndex(h => h.includes(c)), -1)
-
-        const idxStt   = findIdx('stt', 'số')
-        const idxName  = findIdx('họ tên', 'họ và tên', 'tên')
-        const idxMssv  = findIdx('mssv', 'mã số', 'mã sinh viên')
-        const idxLop   = findIdx('lớp', 'class')
-        const idxDiem  = findIdx('điểm', 'điểm qp', 'điểm gdqp', 'diem')
-        const idxDiem2 = findIdx('lần 2', 'lan 2', 'thi lại')
-        const idxKq    = findIdx('kết quả', 'ket qua', 'kq')
-
-        const mapped: StudentRecord[] = firstTable.rows
-          .filter(row => row.cells.some(c => c.trim()))
-          .map((row, i) => {
-            const c = row.cells
-            const dq = idxDiem >= 0 ? (c[idxDiem] ?? '') : ''
-            return {
-              stt:      idxStt  >= 0 ? (c[idxStt]  ?? String(i + 1)) : String(i + 1),
-              ho_ten:   idxName >= 0 ? (c[idxName] ?? '') : '',
-              mssv:     idxMssv >= 0 ? (c[idxMssv] ?? '') : '',
-              lop:      idxLop  >= 0 ? (c[idxLop]  ?? '') : '',
-              diem_qp:  dq,
-              diem_lan2: idxDiem2 >= 0 ? (c[idxDiem2] ?? '') : '',
-              ket_qua:  idxKq   >= 0 ? (c[idxKq]   ?? computeKetQua(dq)) : computeKetQua(dq),
-              ghi_chu:  '',
-            }
-          })
-
-        if (mapped.length > 0) {
-          setRecords(mapped)
-          setMeta(computeMeta(mapped))
-          setStep('review')
-          return
-        }
-      }
-
-      // Không có bảng → thử parse từ raw_text
-      if (rawText.trim()) {
-        await runExtract(rawText)
-      } else {
-        toast('Document AI không nhận dạng được nội dung. Vui lòng thêm bản ghi thủ công.', { icon: 'ℹ️' })
-        setRecords([])
-        setMeta({})
-        setStep('review')
-      }
-    } catch (err) {
-      const isOffline = err instanceof TypeError && (err.message.includes('fetch') || err.message.includes('Failed'))
-      if (isOffline) {
-        markBackendOffline()
-        await runTesseractFallback(blob)
-      } else {
-        console.error('[Document AI] error:', err)
-        toast.error(`Lỗi Document AI: ${err instanceof Error ? err.message : String(err)}`)
-        setRecords([])
-        setMeta({})
-        setStep('review')
-      }
-    }
-  }, [docId, docName, docType, workerUrl, runExtract])
-
-  // ── Tesseract fallback: xử lý PDF ảnh quét từng trang riêng biệt ─────────
+  // ── Load demo records khi không có rawText ─────────────────────────────────
   const runTesseractFallback = useCallback(async (blob: Blob) => {
     // 1. Thử text layer trước (nếu PDF có text)
     try {

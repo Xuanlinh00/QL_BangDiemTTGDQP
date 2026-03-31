@@ -56,9 +56,7 @@ echo.
 echo Services are running at:
 echo   - Frontend:        http://localhost
 echo   - Backend Node:    http://localhost:3000
-echo   - Backend Python:  http://localhost:8000
 echo   - Mongo Express:   http://localhost:8081
-echo   - pgAdmin:         http://localhost:5050
 echo.
 echo To view logs: docker-compose logs -f
 echo To stop: docker-compose down

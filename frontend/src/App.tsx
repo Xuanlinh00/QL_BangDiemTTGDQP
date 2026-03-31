@@ -12,8 +12,10 @@ import Decisions from './pages/Decisions'
 import Settings from './pages/Settings'
 import About from './pages/About'
 import PublicAbout from './pages/PublicAbout'
+import PublicActivities from './pages/PublicActivities'
+import PublicActivityDetail from './pages/PublicActivityDetail'
 import CertificateIssuance from './pages/Certificates'
-import TVUExtract from './pages/TVUExtract'
+import Activities from './pages/Activities'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +44,8 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/gioi-thieu" element={<PublicAbout />} />
+            <Route path="/hoat-dong" element={<PublicActivities />} />
+            <Route path="/hoat-dong/:id" element={<PublicActivityDetail />} />
             <Route
               path="/"
               element={
@@ -55,7 +59,7 @@ export default function App() {
               <Route path="certificates" element={<CertificateIssuance />} />
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
-              <Route path="tvu-extract" element={<TVUExtract />} />
+              <Route path="activities" element={<Activities />} />
               {/* Báo cáo đã bị loại bỏ */}
               <Route path="settings" element={<Settings />} />
             </Route>

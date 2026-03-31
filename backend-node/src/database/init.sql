@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS documents (
   type VARCHAR(50), -- DSGD, QD, BieuMau
   file_path_s3 VARCHAR(500),
   pages INTEGER,
-  ocr_status VARCHAR(50) DEFAULT 'Pending', -- Pending, Processing, Completed, Error
+  status VARCHAR(50) DEFAULT 'Pending', -- Pending, Processing, Completed, Error
   extract_status VARCHAR(50) DEFAULT 'Pending',
   uploaded_by UUID REFERENCES users(id),
   uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 -- Bảng Settings đã được loại bỏ - cấu hình qua biến môi trường
 
 -- Tạo indexes để cải thiện hiệu suất
-CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(ocr_status, extract_status);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status, extract_status);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_at ON documents(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
 CREATE INDEX IF NOT EXISTS idx_students_code ON students(code);
@@ -113,9 +113,9 @@ CREATE OR REPLACE VIEW v_document_stats AS
 SELECT
   COUNT(*) as total_documents,
   SUM(pages) as total_pages,
-  COUNT(CASE WHEN ocr_status = 'Completed' THEN 1 END) as completed_ocr,
+  COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed_documents,
   COUNT(CASE WHEN extract_status = 'Completed' THEN 1 END) as completed_extract,
-  COUNT(CASE WHEN ocr_status = 'Error' THEN 1 END) as error_count
+  COUNT(CASE WHEN status = 'Error' THEN 1 END) as error_count
 FROM documents;
 
 CREATE OR REPLACE VIEW v_student_stats AS
