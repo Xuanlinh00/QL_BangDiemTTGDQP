@@ -14,14 +14,7 @@ interface DocumentMetadata {
   trainingProgram?: string
 }
 
-const currentYear = new Date().getFullYear()
-const yearOptions = Array.from({ length: currentYear - 2014 + 2 }, (_, i) => currentYear + 1 - i)
-
-const DEFAULT_PROGRAMS = ['Đại học', 'Cao đẳng', 'Liên thông', 'Nghề']
-
-// ═══════════════════════════════════════════════════════
-// Auto-parse filename to extract metadata
-// ═══════════════════════════════════════════════════════
+// ─── Auto-parse filename to extract metadata ──────────────────────────────────
 interface ParsedMetadata {
   trainingProgram?: string
   cohort?: string
@@ -31,125 +24,81 @@ interface ParsedMetadata {
 
 function parseFilenameMetadata(filename: string): ParsedMetadata {
   const result: ParsedMetadata = {}
-  
-  // Remove extension
   const nameWithoutExt = filename.replace(/\.[^/.]+$/, '')
-  
+
   // Pattern: DA22, CA22, DF22, DE22, VB22, etc.
-  // DA/CA/DF/DE/VB = prefix (2 letters)
-  // 22 = cohort/year (2 digits)
   const prefixMatch = nameWithoutExt.match(/^([A-Z]{2})(\d{2})/i)
-  
+
   if (prefixMatch) {
     const prefix = prefixMatch[1].toUpperCase()
     const yearNum = parseInt(prefixMatch[2], 10)
-    
-    // Determine training program based on prefix
-    if (prefix === 'DA') {
-      result.trainingProgram = 'Đại học'
-    } else if (prefix === 'CA') {
-      result.trainingProgram = 'Cao đẳng'
-    } else if (['DF', 'DE', 'VB'].includes(prefix)) {
-      result.trainingProgram = 'Liên thông'
-    }
-    
-    // Set cohort (e.g., DA22 → cohort = "DA22")
+
+    if (prefix === 'DA') result.trainingProgram = 'Đại học'
+    else if (prefix === 'CA') result.trainingProgram = 'Cao đẳng'
+    else if (['DF', 'DE', 'VB'].includes(prefix)) result.trainingProgram = 'Liên thông'
+
     result.cohort = `${prefix}${yearNum}`
-    
-    // Calculate academic year (e.g., 22 → 2022)
-    // Assume 00-30 = 2000-2030, 31-99 = 1931-1999
     const fullYear = yearNum <= 30 ? 2000 + yearNum : 1900 + yearNum
     result.academicYear = String(fullYear)
-    
-    // Try to extract class name from remaining text
-    // Pattern: DA22TYC, CA22CNTT, etc.
+
     const classMatch = nameWithoutExt.match(/^[A-Z]{2}\d{2}([A-Z0-9]+)/i)
-    if (classMatch && classMatch[1]) {
-      result.className = `${prefix}${yearNum}${classMatch[1]}`
-    } else {
-      // Fallback: use prefix + year as class name
-      result.className = `${prefix}${yearNum}`
-    }
+    result.className = classMatch?.[1]
+      ? `${prefix}${yearNum}${classMatch[1]}`
+      : `${prefix}${yearNum}`
   }
-  
+
   return result
+}
+
+function FileTypeIcon({ type }: { type: string }) {
+  const isPdf = type === 'application/pdf'
+  return (
+    <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${isPdf ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+      {isPdf ? 'PDF' : 'XLS'}
+    </span>
+  )
 }
 
 export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalProps) {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
-  
-  // Metadata fields
-  const [academicYear, setAcademicYear] = useState<string>('')
-  const [cohort, setCohort] = useState<string>('')
-  const [className, setClassName] = useState<string>('')
-  const [trainingProgram, setTrainingProgram] = useState<string>('')
-  const [customProgram, setCustomProgram] = useState<string>('')
-  const [showCustomProgram, setShowCustomProgram] = useState(false)
-  const [programOptions, setProgramOptions] = useState<string[]>(DEFAULT_PROGRAMS)
-  const [customYear, setCustomYear] = useState<string>('')
-  const [showCustomYear, setShowCustomYear] = useState(false)
-  const [extraYears, setExtraYears] = useState<number[]>([])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setDragActive(false)
-    }
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true)
+    else if (e.type === 'dragleave') setDragActive(false)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-
-    const files = Array.from(e.dataTransfer.files)
-    addFiles(files)
+    addFiles(Array.from(e.dataTransfer.files))
   }
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files)
-      addFiles(files)
-    }
+    if (e.target.files) addFiles(Array.from(e.target.files))
   }
 
   const addFiles = (newFiles: File[]) => {
     const validFiles = newFiles.filter(file => {
-      const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']
+      const validTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+      ]
       if (!validTypes.includes(file.type)) {
         toast.error(`${file.name} không phải PDF hoặc Excel`)
         return false
       }
       return true
     })
-    
-    // Auto-parse metadata from first file if fields are empty
-    if (validFiles.length > 0 && !academicYear && !trainingProgram) {
-      const parsed = parseFilenameMetadata(validFiles[0].name)
-      
-      if (parsed.trainingProgram) {
-        setTrainingProgram(parsed.trainingProgram)
-      }
-      if (parsed.cohort) {
-        setCohort(parsed.cohort)
-      }
-      if (parsed.academicYear) {
-        setAcademicYear(parsed.academicYear)
-      }
-      if (parsed.className) {
-        setClassName(parsed.className)
-      }
-    }
-    
-    setUploadedFiles([...uploadedFiles, ...validFiles])
+    setUploadedFiles(prev => [...prev, ...validFiles])
   }
 
   const removeFile = (index: number) => {
-    setUploadedFiles(uploadedFiles.filter((_, i) => i !== index))
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleUpload = () => {
@@ -157,287 +106,165 @@ export default function UploadModal({ isOpen, onClose, onUpload }: UploadModalPr
       toast.error('Vui lòng chọn ít nhất 1 file')
       return
     }
-    
-    // Process each file individually based on its filename
-    const filesWithMetadata = uploadedFiles.map(file => {
+    // Each file gets its own auto-parsed metadata from its filename
+    uploadedFiles.forEach(file => {
       const parsed = parseFilenameMetadata(file.name)
-      return {
-        file,
-        metadata: {
-          academicYear: parsed.academicYear || academicYear || undefined,
-          cohort: parsed.cohort || cohort || undefined,
-          className: parsed.className || className || undefined,
-          trainingProgram: parsed.trainingProgram || trainingProgram || undefined,
-        }
-      }
+      onUpload([file], 'DSGD', {
+        academicYear: parsed.academicYear,
+        cohort: parsed.cohort,
+        className: parsed.className,
+        trainingProgram: parsed.trainingProgram,
+      })
     })
-    
-    // Call onUpload for each file with its own metadata
-    filesWithMetadata.forEach(({ file, metadata }) => {
-      onUpload([file], 'DSGD', metadata)
-    })
-    
-    // Reset form
     setUploadedFiles([])
-    setAcademicYear('')
-    setCohort('')
-    setClassName('')
-    setTrainingProgram('')
-    setCustomProgram('')
-    setShowCustomProgram(false)
-    setShowCustomYear(false)
-    setCustomYear('')
     onClose()
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 border border-gray-200 dark:border-slate-700 max-h-[90vh] flex flex-col">
-        <div className="border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white">📊 Tải bảng điểm lên</h2>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Tải bảng điểm lên</h2>
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Thông tin tự động phân loại từ tên file</p>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-white text-2xl"
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
           >
-            ✕
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
           </button>
         </div>
 
-        <div className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Metadata fields for Bảng điểm */}
-          <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-3">
-              📝 Thông tin bảng điểm
-            </p>
-            
-            {/* Academic Year */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Năm học
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={showCustomYear ? '__custom__' : academicYear}
-                  onChange={(e) => {
-                    if (e.target.value === '__custom__') {
-                      setShowCustomYear(true)
-                      setAcademicYear('')
-                      setCustomYear('')
-                    } else {
-                      setShowCustomYear(false)
-                      setAcademicYear(e.target.value)
-                      setCustomYear('')
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">-- Chọn năm --</option>
-                  {[...new Set([...yearOptions, ...extraYears])].sort((a, b) => b - a).map(y => (
-                    <option key={y} value={String(y)}>{y}</option>
-                  ))}
-                  <option value="__custom__">＋ Thêm năm...</option>
-                </select>
-              </div>
-              {showCustomYear && (
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="number"
-                    value={customYear}
-                    onChange={(e) => setCustomYear(e.target.value)}
-                    placeholder="VD: 2013"
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const val = parseInt(customYear, 10)
-                      if (!isNaN(val) && val >= 1900 && val <= 2100) {
-                        if (!yearOptions.includes(val) && !extraYears.includes(val)) {
-                          setExtraYears(prev => [...prev, val])
-                        }
-                        setAcademicYear(String(val))
-                        setShowCustomYear(false)
-                        setCustomYear('')
-                      } else {
-                        toast.error('Năm không hợp lệ')
-                      }
-                    }}
-                    className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Thêm
-                  </button>
-                </div>
-              )}
-            </div>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
-            {/* Training Program */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                Chương trình đào tạo
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={showCustomProgram ? '__custom__' : trainingProgram}
-                  onChange={(e) => {
-                    if (e.target.value === '__custom__') {
-                      setShowCustomProgram(true)
-                      setTrainingProgram('')
-                      setCustomProgram('')
-                    } else {
-                      setShowCustomProgram(false)
-                      setTrainingProgram(e.target.value)
-                      setCustomProgram('')
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">-- Chọn CTĐT --</option>
-                  {programOptions.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                  <option value="__custom__">＋ Thêm mới...</option>
-                </select>
-              </div>
-              {showCustomProgram && (
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={customProgram}
-                    onChange={(e) => setCustomProgram(e.target.value)}
-                    placeholder="Nhập tên CTĐT mới"
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const val = customProgram.trim()
-                      if (val && !programOptions.includes(val)) {
-                        setProgramOptions(prev => [...prev, val])
-                      }
-                      if (val) {
-                        setTrainingProgram(val)
-                        setShowCustomProgram(false)
-                        setCustomProgram('')
-                      }
-                    }}
-                    className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Thêm
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Cohort */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Khóa
-                </label>
-                <input
-                  type="text"
-                  value={cohort}
-                  onChange={(e) => setCohort(e.target.value)}
-                  placeholder="VD: DA21, K47"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Class Name */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Lớp
-                </label>
-                <input
-                  type="text"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  placeholder="VD: DA21TYC, K47CNTT"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">
-              Thông tin sẽ được tự động phân loại từ tên file (VD: DA22TYC.pdf). Bạn có thể chỉnh sửa nếu cần.
-            </p>
-          </div>
-
-          {/* Drag and drop area */}
+          {/* Drop zone */}
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-              dragActive ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/50'
+            className={`relative border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
+              dragActive
+                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 scale-[1.01]'
+                : 'border-gray-200 dark:border-slate-600 bg-gray-50/60 dark:bg-slate-700/30 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10'
             }`}
           >
-            <div className="text-4xl mb-2">📁</div>
-            <p className="text-gray-700 dark:text-slate-300 font-medium">Kéo thả file vào đây</p>
-            <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">hoặc</p>
-            <label className="inline-block mt-3">
-              <span className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl cursor-pointer transition-colors">
-                Chọn file
-              </span>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.xlsx,.xls"
-                onChange={handleFileInput}
-                className="hidden"
-              />
-            </label>
-            <p className="text-gray-500 dark:text-slate-400 text-xs mt-3">Hỗ trợ: PDF, Excel (.xlsx, .xls)</p>
+            <div className="flex flex-col items-center gap-3">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors ${dragActive ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-gray-100 dark:bg-slate-700'}`}>
+                <svg className={`w-7 h-7 transition-colors ${dragActive ? 'text-indigo-500' : 'text-gray-400 dark:text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-300">
+                  {dragActive ? 'Thả file vào đây' : 'Kéo thả file vào đây'}
+                </p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">PDF, Excel (.xlsx, .xls)</p>
+              </div>
+              <label className="mt-1 cursor-pointer">
+                <span className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors inline-block">
+                  Chọn file
+                </span>
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.xlsx,.xls"
+                  onChange={handleFileInput}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
 
           {/* File list */}
           {uploadedFiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-700 dark:text-slate-300">File đã chọn ({uploadedFiles.length}):</p>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {uploadedFiles.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700/50 rounded-xl">
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-lg">
-                        {file.type === 'application/pdf' ? '📄' : '📊'}
-                      </span>
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                Đã chọn — {uploadedFiles.length} file
+              </p>
+              <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                {uploadedFiles.map((file, index) => {
+                  const parsed = parseFilenameMetadata(file.name)
+                  return (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-slate-700/60 rounded-xl border border-gray-100 dark:border-slate-700 group"
+                    >
+                      <FileTypeIcon type={file.type} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 dark:text-slate-200 truncate">{file.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {parsed.trainingProgram && (
+                            <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">{parsed.trainingProgram}</span>
+                          )}
+                          {parsed.cohort && (
+                            <span className="text-[11px] text-gray-400 dark:text-slate-500">Khóa {parsed.cohort}</span>
+                          )}
+                          {parsed.className && parsed.className !== parsed.cohort && (
+                            <span className="text-[11px] text-gray-400 dark:text-slate-500">· {parsed.className}</span>
+                          )}
+                          {parsed.academicYear && (
+                            <span className="text-[11px] text-amber-600 dark:text-amber-500">Năm {parsed.academicYear}</span>
+                          )}
+                          <span className="text-[11px] text-gray-300 dark:text-slate-600 ml-auto">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </span>
+                        </div>
                       </div>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="p-1.5 text-gray-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        title="Xóa"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeFile(index)}
-                      className="text-red-600 hover:text-red-800 font-medium text-sm ml-2"
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Action buttons */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 -mx-6 px-6 -mb-6 pb-6">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-xl transition-colors"
-            >
-              Hủy
-            </button>
-            <button
-              onClick={handleUpload}
-              className="flex-1 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors"
-            >
-              Tải lên ({uploadedFiles.length})
-            </button>
+          {/* Info note */}
+          <div className="flex items-start gap-2.5 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/40">
+            <svg className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+              Thông tin sẽ được tự động phân loại từ tên file. VD: <span className="font-mono font-semibold">DA22TYC.pdf</span> → Đại học · Khóa DA22 · Lớp DA22TYC · Năm 2022.
+              Bạn có thể chỉnh sửa sau khi tải lên.
+            </p>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 bg-gray-50/50 dark:bg-slate-800">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 bg-white dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200 font-semibold rounded-xl border border-gray-200 dark:border-slate-600 transition-colors text-sm"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={handleUpload}
+            disabled={uploadedFiles.length === 0}
+            className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-sm text-sm flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+            </svg>
+            Tải lên {uploadedFiles.length > 0 ? `(${uploadedFiles.length})` : ''}
+          </button>
         </div>
       </div>
     </div>
