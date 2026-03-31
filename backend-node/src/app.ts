@@ -20,9 +20,9 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 // Middleware
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176').split(',')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',')
 app.use(cors({
-  origin: allowedOrigins,
+  origin: allowedOrigins.map(origin => origin.trim()),
   credentials: true,
 }))
 app.use(express.json({ limit: '50mb' }))
@@ -86,14 +86,14 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Connect to MongoDB then start server
 connectMongoDB()
   .then(() => {
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT}`)
     })
   })
   .catch((err) => {
     logger.error('Failed to connect MongoDB:', err)
     // Start server anyway - MongoDB is optional for some features
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT} (MongoDB not connected)`)
     })
   })
