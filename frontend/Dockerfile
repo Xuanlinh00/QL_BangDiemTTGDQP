@@ -27,14 +27,14 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration template
 COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 
-# Create entrypoint script
+# Create entrypoint script for dynamic PORT
 RUN echo '#!/bin/sh\n\
-export PORT=${PORT:-8080}\n\
+export PORT=${PORT:-3000}\n\
 envsubst '\''${PORT}'\'' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf\n\
 exec nginx -g "daemon off;"' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 # Expose port (default for local)
-EXPOSE 8080
+EXPOSE 3000
 
 # Start with entrypoint
 ENTRYPOINT ["/docker-entrypoint.sh"]
