@@ -22,8 +22,9 @@ services:
     env: node
     region: singapore
     plan: free
-    buildCommand: cd backend-node && npm install && npm run build
-    startCommand: cd backend-node && npm start
+    rootDir: backend-node
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -72,8 +73,9 @@ services:
   - type: web
     name: tvu-frontend
     env: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
     routes:
       - type: rewrite
         source: /*
