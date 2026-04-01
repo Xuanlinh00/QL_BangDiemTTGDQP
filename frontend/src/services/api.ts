@@ -4,6 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 12000,
 })
 
 // Add token to requests
@@ -23,10 +24,18 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const status = error?.response?.status
+
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       window.location.href = '/login'
     }
+
+    // Avoid noisy console errors for expected backend downtime/timeouts.
+    if (status === 503 || status === 504 || error.code === 'ECONNABORTED') {
+      return Promise.reject(error)
+    }
+
     return Promise.reject(error)
   }
 )

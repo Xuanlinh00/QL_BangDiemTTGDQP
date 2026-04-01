@@ -16,6 +16,7 @@ import PublicActivities from './pages/PublicActivities'
 import PublicActivityDetail from './pages/PublicActivityDetail'
 import CertificateIssuance from './pages/Certificates'
 import Activities from './pages/Activities'
+import ActivityEditorDemo from './pages/ActivityEditorDemo'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
               <Route path="activities" element={<Activities />} />
+              <Route path="activities/new" element={<ActivityEditorDemo />} />
               {/* Báo cáo đã bị loại bỏ */}
               <Route path="settings" element={<Settings />} />
             </Route>

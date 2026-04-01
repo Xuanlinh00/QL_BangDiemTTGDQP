@@ -57,6 +57,57 @@ code {
   overflow: hidden;
 }
 
+/* Rich Editor Placeholder */
+[contenteditable][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* Rich Editor Styles */
+[contenteditable] {
+  outline: none;
+}
+
+[contenteditable] blockquote {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
+[contenteditable] pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-family: monospace;
+}
+
+[contenteditable] img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+[contenteditable] hr {
+  border: none;
+  border-top: 2px solid #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+[contenteditable] iframe {
+  width: 100%;
+  min-height: 320px;
+  border: none;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
 /* Animations */
 @keyframes fade-in-up {
   from {

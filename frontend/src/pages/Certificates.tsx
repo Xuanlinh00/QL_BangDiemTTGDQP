@@ -1,518 +1,382 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
-import Button from '../components/Common/Button';
-import Input from '../components/Common/Input';
-import Select from '../components/Common/Select';
 
+/* ─── tiny inline components (no external deps needed) ─── */
+const Btn = ({
+  children, onClick, disabled = false, variant = 'primary', size = 'md', className = '',
+}: {
+  children: React.ReactNode; onClick?: (e: React.MouseEvent) => void;
+  disabled?: boolean; variant?: 'primary'|'secondary'|'danger'|'ghost'|'success';
+  size?: 'sm'|'md'; className?: string;
+}) => {
+  const base = 'inline-flex items-center justify-center gap-1.5 font-semibold rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none';
+  const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2.5 text-sm' };
+  const vars = {
+    primary:   'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md',
+    secondary: 'bg-white border border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm',
+    danger:    'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200',
+    ghost:     'text-gray-500 hover:text-gray-700 hover:bg-gray-100',
+    success:   'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+  };
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className={`${base} ${sizes[size]} ${vars[variant]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+/* ─── types ─── */
 interface StudentWithDate {
-  mssv: string;
-  hoTen: string;
-  diaChi?: string;
-  ngayPhat?: string;
+  mssv: string; hoTen: string; diaChi?: string; ngayPhat?: string;
   [key: string]: string | undefined;
 }
-
 interface FileData {
-  id: string;
-  name: string;
-  students: StudentWithDate[];
-  uploadedAt: string;
+  id: string; name: string; students: StudentWithDate[]; uploadedAt: string;
 }
+
+/* ─── icons (inline SVG) ─── */
+const UploadIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+);
+const DownloadIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+);
+const SearchIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+);
+const TrashIcon = () => (
+  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+);
+const FileIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+);
+const CheckIcon = () => (
+  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><polyline points="20 6 9 17 4 12"/></svg>
+);
 
 export default function CertificateIssuance() {
   const [fileList, setFileList] = useState<FileData[]>(() => {
-    // Load from localStorage on init
-    const saved = localStorage.getItem('certificateFileList');
-    return saved ? JSON.parse(saved) : [];
+    try { const s = localStorage.getItem('certificateFileList'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
   });
-  const [activeFileId, setActiveFileId] = useState<string | null>(() => {
-    const saved = localStorage.getItem('certificateActiveFileId');
-    return saved || null;
-  });
+  const [activeFileId, setActiveFileId] = useState<string | null>(() => localStorage.getItem('certificateActiveFileId'));
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'issued' | 'pending'>('all');
-  const [searchMSSV, setSearchMSSV] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all'|'issued'|'pending'>('all');
   const [searchResult, setSearchResult] = useState<StudentWithDate | null>(null);
+  const [showFileList, setShowFileList] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pageSize = 10;
 
-  // Save to localStorage whenever fileList changes
-  useEffect(() => {
-    localStorage.setItem('certificateFileList', JSON.stringify(fileList));
-  }, [fileList]);
+  useEffect(() => { localStorage.setItem('certificateFileList', JSON.stringify(fileList)); }, [fileList]);
+  useEffect(() => { if (activeFileId) localStorage.setItem('certificateActiveFileId', activeFileId); }, [activeFileId]);
 
-  // Save to localStorage whenever activeFileId changes
-  useEffect(() => {
-    if (activeFileId) {
-      localStorage.setItem('certificateActiveFileId', activeFileId);
-    }
-  }, [activeFileId]);
-
-  // ── Upload Excel ──────────────────────────────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+    const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = (ev) => {
       try {
-        const data = event.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawData = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[];
-
-        console.log('📊 Raw Excel data (first row):', rawData[0]);
-        console.log('📊 All column names:', rawData[0] ? Object.keys(rawData[0]) : []);
-
-        // Normalize column names - map various possible column names to standard fields
-        const jsonData: StudentWithDate[] = rawData.map((row) => {
-          const normalized: StudentWithDate = {
-            mssv: '',
-            hoTen: '',
-            diaChi: '',
-            ngayPhat: '',
-          };
-
-          // Find MSSV field (case insensitive)
-          const mssvKey = Object.keys(row).find(k => 
-            k.toLowerCase().includes('mssv') || 
-            k.toLowerCase().includes('mã số') ||
-            k.toLowerCase().includes('ma so')
-          );
-          if (mssvKey) normalized.mssv = String(row[mssvKey] || '').trim();
-
-          // Find Họ tên field - more flexible matching
-          const hoTenKey = Object.keys(row).find(k => {
-            const lower = k.toLowerCase();
-            return lower.includes('họ') || 
-                   lower.includes('tên') || 
-                   lower.includes('ten') ||
-                   lower.includes('ho') ||
-                   lower.includes('name') ||
-                   lower === 'hoten' ||
-                   lower === 'họ tên' ||
-                   lower === 'ho ten';
+        const wb = XLSX.read(ev.target?.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws) as Record<string, any>[];
+        const jsonData: StudentWithDate[] = raw.map(row => {
+          const norm: StudentWithDate = { mssv: '', hoTen: '', diaChi: '', ngayPhat: '' };
+          const find = (tests: ((k: string) => boolean)[]) =>
+            Object.keys(row).find(k => tests.some(t => t(k.toLowerCase())));
+          const mssvKey = find([k => k.includes('mssv'), k => k.includes('mã số'), k => k.includes('ma so')]);
+          const hoTenKey = find([k => k.includes('họ'), k => k.includes('tên'), k => k.includes('ten'), k => k.includes('name'), k => k === 'hoten', k => k === 'ho ten']);
+          const diaChiKey = find([k => k.includes('địa chỉ'), k => k.includes('dia chi'), k => k.includes('address')]);
+          const ngayPhatKey = find([k => k.includes('ngày phát'), k => k.includes('ngay phat'), k => k === 'ngayphat']);
+          if (mssvKey) norm.mssv = String(row[mssvKey] || '').trim();
+          if (hoTenKey) norm.hoTen = String(row[hoTenKey] || '').trim();
+          if (diaChiKey) norm.diaChi = String(row[diaChiKey] || '').trim();
+          if (ngayPhatKey) norm.ngayPhat = String(row[ngayPhatKey] || '').trim();
+          Object.keys(row).forEach(k => {
+            if (k !== mssvKey && k !== hoTenKey && k !== diaChiKey && k !== ngayPhatKey)
+              norm[k] = String(row[k] || '').trim();
           });
-          if (hoTenKey) normalized.hoTen = String(row[hoTenKey] || '').trim();
-
-          // Find Địa chỉ field
-          const diaChiKey = Object.keys(row).find(k => {
-            const lower = k.toLowerCase();
-            return lower.includes('địa chỉ') || 
-                   lower.includes('dia chi') ||
-                   lower.includes('address') ||
-                   lower === 'diachi';
-          });
-          if (diaChiKey) normalized.diaChi = String(row[diaChiKey] || '').trim();
-
-          // Find Ngày phát field
-          const ngayPhatKey = Object.keys(row).find(k => {
-            const lower = k.toLowerCase();
-            return lower.includes('ngày phát') || 
-                   lower.includes('ngay phat') ||
-                   lower === 'ngayphat';
-          });
-          if (ngayPhatKey) normalized.ngayPhat = String(row[ngayPhatKey] || '').trim();
-
-          // Keep all other fields
-          Object.keys(row).forEach(key => {
-            if (key !== mssvKey && key !== hoTenKey && key !== diaChiKey && key !== ngayPhatKey) {
-              normalized[key] = String(row[key] || '').trim();
-            }
-          });
-
-          return normalized;
+          return norm;
         });
-
-        console.log('✅ Normalized data (first row):', jsonData[0]);
-
-        const newFile: FileData = {
-          id: Date.now().toString(),
-          name: file.name,
-          students: jsonData,
-          uploadedAt: new Date().toLocaleString('vi-VN'),
-        };
-
-        setFileList((prev) => [...prev, newFile]);
+        const newFile: FileData = { id: Date.now().toString(), name: file.name, students: jsonData, uploadedAt: new Date().toLocaleString('vi-VN') };
+        setFileList(p => [...p, newFile]);
         setActiveFileId(newFile.id);
-        setSearchTerm('');
-        setSearchResult(null);
+        setSearchTerm(''); setSearchResult(null);
         toast.success(`Đã tải lên: ${file.name} (${jsonData.length} sinh viên)`);
-      } catch (error) {
-        toast.error('Lỗi khi đọc file Excel: ' + (error as Error).message);
-      }
+      } catch (err) { toast.error('Lỗi đọc file: ' + (err as Error).message); }
     };
     reader.readAsBinaryString(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const activeFile = fileList.find((f) => f.id === activeFileId);
+  const activeFile = fileList.find(f => f.id === activeFileId);
   const students = activeFile?.students ?? [];
 
-  // ── Filter ────────────────────────────────────────────────────────
   const filteredStudents = useMemo(() => {
     let list = students;
-
-    if (statusFilter === 'issued') list = list.filter((s) => !!s.ngayPhat);
-    if (statusFilter === 'pending') list = list.filter((s) => !s.ngayPhat);
-
+    if (statusFilter === 'issued') list = list.filter(s => !!s.ngayPhat);
+    if (statusFilter === 'pending') list = list.filter(s => !s.ngayPhat);
     const q = searchTerm.toLowerCase().trim();
-    if (q) {
-      list = list.filter((s) =>
-        `${s.mssv} ${s.hoTen} ${s.diaChi ?? ''}`.toLowerCase().includes(q)
-      );
-    }
+    if (q) list = list.filter(s => `${s.mssv} ${s.hoTen} ${s.diaChi ?? ''}`.toLowerCase().includes(q));
     return list;
   }, [students, searchTerm, statusFilter]);
 
-  // ── Issue certificate for single student ─────────────────────────
-  const handleIssueSingleCertificate = (mssv: string) => {
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStudents.slice(start, start + pageSize);
+  }, [filteredStudents, currentPage]);
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 3) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 2) return [1, 2, 3];
+    if (currentPage >= totalPages - 1) return [totalPages - 2, totalPages - 1, totalPages];
+    return [currentPage - 1, currentPage, currentPage + 1];
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFileId, searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const handleIssue = (mssv: string) => {
     const today = new Date().toLocaleDateString('vi-VN');
-
-    setFileList((prev) =>
-      prev.map((file) =>
-        file.id !== activeFileId
-          ? file
-          : {
-              ...file,
-              students: file.students.map((s) =>
-                s.mssv === mssv ? { ...s, ngayPhat: today } : s
-              ),
-            }
-      )
-    );
-    
-    // Update search result if it's the same student
-    if (searchResult && searchResult.mssv === mssv) {
-      setSearchResult({ ...searchResult, ngayPhat: today });
-    }
-    
-    toast.success(`Đã phát chứng nhận cho sinh viên ${mssv}`);
+    setFileList(prev => prev.map(file => file.id !== activeFileId ? file : {
+      ...file, students: file.students.map(s => s.mssv === mssv ? { ...s, ngayPhat: today } : s)
+    }));
+    if (searchResult?.mssv === mssv) setSearchResult(p => p ? { ...p, ngayPhat: today } : p);
+    toast.success(`Đã phát chứng nhận cho ${mssv}`);
   };
 
-  // ── Search student by MSSV ────────────────────────────────────────
-  const handleSearch = () => {
-    if (!searchMSSV.trim()) {
-      toast.error('Vui lòng nhập MSSV');
-      return;
-    }
-
-    const student = students.find(
-      (s) => s.mssv.toLowerCase() === searchMSSV.trim().toLowerCase()
-    );
-
-    if (student) {
-      setSearchResult(student);
-      toast.success('Tìm thấy sinh viên');
-    } else {
-      setSearchResult(null);
-      toast.error('Không tìm thấy sinh viên với MSSV này');
-    }
-  };
-
-  // ── Issue certificate from search result ──────────────────────────
-  const handleIssue = () => {
-    if (searchResult) {
-      handleIssueSingleCertificate(searchResult.mssv);
-    }
-  };
-
-  // ── Export ────────────────────────────────────────────────────────
   const handleExport = () => {
-    if (!activeFile || activeFile.students.length === 0) {
-      toast.error('Không có dữ liệu để xuất');
-      return;
-    }
-    const worksheet = XLSX.utils.json_to_sheet(activeFile.students);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sinh viên');
-    const exportFileName = `${activeFile.name.replace(/\.xlsx?$/, '')}_da_phat_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(workbook, exportFileName);
-    toast.success('Xuất file Excel thành công');
+    if (!activeFile?.students.length) { toast.error('Không có dữ liệu để xuất'); return; }
+    const ws = XLSX.utils.json_to_sheet(activeFile.students);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sinh viên');
+    XLSX.writeFile(wb, `${activeFile.name.replace(/\.xlsx?$/, '')}_da_phat_${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast.success('Xuất file thành công');
   };
 
-  // ── Delete file ───────────────────────────────────────────────────
-  const handleDeleteFile = (fileId: string) => {
-    if (!window.confirm('Bạn có chắc muốn xóa file này?')) return;
-    const newList = fileList.filter((f) => f.id !== fileId);
-    setFileList(newList);
-    if (activeFileId === fileId) {
-      setActiveFileId(newList[0]?.id ?? null);
-    }
+  const handleDeleteFile = (id: string) => {
+    if (!window.confirm('Xác nhận xóa file này?')) return;
+    const next = fileList.filter(f => f.id !== id);
+    setFileList(next);
+    if (activeFileId === id) setActiveFileId(next[0]?.id ?? null);
     toast.success('Đã xóa file');
   };
 
-  const columns = [
-    { key: 'mssv', label: 'MSSV', width: '15%' },
-    { key: 'hoTen', label: 'Họ và tên', width: '25%' },
-    { key: 'diaChi', label: 'Địa chỉ', width: '30%' },
-    { key: 'status', label: 'Trạng thái', width: '15%' },
-    { key: 'ngayPhat', label: 'Ngày phát', width: '15%' },
-  ];
-
   return (
-    <div className="p-6 space-y-6">
-      {/* ── Header ── */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
-            Phát Chứng Nhận
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Quản lý phát chứng nhận cho sinh viên theo file Excel
-          </p>
-        </div>
+    <div style={{ fontFamily: "'IBM Plex Sans', 'Segoe UI', sans-serif" }} className="min-h-screen bg-[#f4f6f9] text-gray-800">
 
-        <div className="flex gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <Button
-            variant="primary"
-            className="flex items-center gap-2"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            📤 Tải danh sách Excel lên
-          </Button>
+      <div className="w-full py-5 space-y-4">
 
+        <div className="flex gap-2 flex-wrap justify-end">
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
+          <Btn variant="secondary" onClick={() => setShowFileList(v => !v)}>
+            📂 Danh sách tệp ({fileList.length})
+          </Btn>
+          <Btn variant="primary" onClick={() => fileInputRef.current?.click()}>
+            <UploadIcon /> Tải danh sách Excel
+          </Btn>
           {activeFile && (
-            <Button
-              onClick={handleExport}
-              variant="secondary"
-              className="flex items-center gap-2"
-            >
-              📥 Xuất Excel (Đã cập nhật ngày phát)
-            </Button>
+            <Btn variant="secondary" onClick={handleExport}>
+              <DownloadIcon /> Xuất Excel
+            </Btn>
           )}
         </div>
-      </div>
 
-      {/* ── Danh sách file đã tải ── */}
-      {fileList.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
-          <div className="px-6 py-4 border-b dark:border-slate-700 font-medium text-gray-700 dark:text-gray-300">
-            Danh sách file đã tải lên
-          </div>
-          <div className="divide-y dark:divide-slate-700">
-            {fileList.map((file) => (
-              <div
-                key={file.id}
-                onClick={() => {
-                  setActiveFileId(file.id);
-                  setSearchTerm('');
-                }}
-                className={`flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/70 transition-colors ${
-                  activeFileId === file.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                }`}
-              >
-                <div>
-                  <p className="font-semibold text-gray-900 dark:text-white">{file.name}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {file.students.length} sinh viên • Tải lên: {file.uploadedAt}
-                  </p>
-                </div>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteFile(file.id);
-                  }}
-                >
-                  Xóa
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Bộ lọc ── */}
-      {activeFile && (
-        <div className="flex gap-4 flex-wrap">
-          <Input
-            placeholder="Tìm kiếm theo MSSV, Họ tên, Địa chỉ..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 min-w-[280px]"
-          />
-          <Select
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as 'all' | 'issued' | 'pending')
-            }
-            options={[
-              { value: 'all', label: 'Tất cả trạng thái' },
-              { value: 'pending', label: 'Chưa phát' },
-              { value: 'issued', label: 'Đã phát' },
-            ]}
-          />
-        </div>
-      )}
-
-      {/* ── Tra cứu sinh viên ── */}
-      {activeFile && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-            Tra cứu sinh viên
-          </h2>
-          <div className="flex gap-3">
-            <Input
-              placeholder="Nhập MSSV..."
-              value={searchMSSV}
-              onChange={(e) => setSearchMSSV(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="flex-1"
-            />
-            <Button onClick={handleSearch} variant="primary">
-              🔍 Tìm kiếm
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Kết quả tìm kiếm ── */}
-      {searchResult && activeFile && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow p-6">
-          <h2 className="text-xl font-semibold mb-6 text-gray-800 dark:text-white">
-            Thông tin sinh viên
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {Object.entries(searchResult)
-              .filter(([key]) => ['mssv', 'hoTen', 'diaChi', 'ngayPhat'].includes(key))
-              .map(([key, value]) => (
-                <div key={key} className="space-y-1">
-                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase">
-                    {key === 'mssv'
-                      ? 'MSSV'
-                      : key === 'hoTen'
-                      ? 'Họ và tên'
-                      : key === 'diaChi'
-                      ? 'Địa chỉ'
-                      : key === 'ngayPhat'
-                      ? 'Ngày phát chứng nhận'
-                      : key}
-                  </label>
-                  <p className="text-lg font-medium text-gray-900 dark:text-white">
-                    {value || '—'}
-                  </p>
+        {/* ── FILE LIST ── */}
+        {showFileList && fileList.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2">
+              <span className="w-1.5 h-4 bg-[#1a3a5c] rounded-full inline-block" />
+              <span className="text-sm font-semibold text-gray-700">Danh sách file đã tải ({fileList.length})</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {fileList.map(file => (
+                <div key={file.id} onClick={() => { setActiveFileId(file.id); setSearchTerm(''); setShowFileList(false); }}
+                  className={`flex items-center justify-between px-5 py-3.5 cursor-pointer transition-colors hover:bg-blue-50/50
+                    ${activeFileId === file.id ? 'bg-blue-50 border-r-2 border-r-[#1a3a5c]' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${activeFileId === file.id ? 'bg-[#1a3a5c] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      <FileIcon />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{file.name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {file.students.length} sinh viên &nbsp;·&nbsp; Tải lên {file.uploadedAt}
+                      </p>
+                    </div>
+                  </div>
+                  <Btn variant="danger" size="sm"
+                    onClick={e => { e.stopPropagation(); handleDeleteFile(file.id); }}>
+                    <TrashIcon /> Xóa
+                  </Btn>
                 </div>
               ))}
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={handleIssue}
-              disabled={!!searchResult.ngayPhat}
-              variant={searchResult.ngayPhat ? 'secondary' : 'success'}
-            >
-              {searchResult.ngayPhat ? '✓ Đã phát chứng nhận' : '✓ Phát chứng nhận'}
-            </Button>
-            {searchResult.ngayPhat && (
-              <div className="px-4 py-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg font-medium flex items-center">
-                Ngày phát: {searchResult.ngayPhat}
+        )}
+
+        {/* ── Filter Zone ── */}
+        {activeFile && (
+          <div className="grid grid-cols-1 gap-4">
+
+            {/* Filter card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-blue-600 rounded-full inline-block" />
+                Lọc &amp; Tìm kiếm danh sách
+              </p>
+              <div className="relative">
+                <SearchIcon />
+                <input
+                  placeholder="Tìm theo MSSV, Họ tên, Địa chỉ..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 transition-all bg-gray-50"
+                  style={{ paddingLeft: '2.2rem' }}
+                />
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
+                  <SearchIcon />
+                </div>
+              </div>
+              <div className="flex gap-1.5">
+                {(['all','pending','issued'] as const).map(v => {
+                  const labels = { all: 'Tất cả', pending: 'Chưa phát', issued: 'Đã phát' };
+                  const active = statusFilter === v;
+                  return (
+                    <button key={v} onClick={() => setStatusFilter(v)}
+                      className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all
+                        ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                      {labels[v]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TABLE ── */}
+        {activeFile && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-blue-600 text-white">
+                    {['#', 'MSSV', 'Họ và tên', 'Địa chỉ', 'Trạng thái', 'Ngày phát', 'Thao tác'].map(h => (
+                      <th key={h} className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-16 text-center">
+                        <div className="text-gray-300 text-4xl mb-3">🔍</div>
+                        <p className="text-gray-400 font-medium">Không tìm thấy sinh viên nào</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedStudents.map((s, i) => {
+                      const issued = !!s.ngayPhat;
+                      const rowNo = (currentPage - 1) * pageSize + i + 1;
+                      return (
+                        <tr key={i}
+                          className={`border-b border-gray-50 last:border-b-0 transition-colors hover:bg-blue-50/40
+                            ${issued ? 'bg-emerald-50/30' : 'bg-white'}`}>
+                          <td className="px-4 py-3 text-gray-400 text-xs font-mono">{rowNo}</td>
+                          <td className="px-4 py-3 font-mono font-semibold text-blue-700 text-xs">{s.mssv}</td>
+                          <td className="px-4 py-3 font-medium text-gray-800">{s.hoTen}</td>
+                          <td className="px-4 py-3 text-gray-500 max-w-[200px] truncate">{s.diaChi || '—'}</td>
+                          <td className="px-4 py-3">
+                            {issued ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">
+                                <CheckIcon /> Đã phát
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold border border-gray-200">
+                                Chờ phát
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs font-mono">{s.ngayPhat || '—'}</td>
+                          <td className="px-4 py-3">
+                            {!issued && (
+                              <Btn variant="primary" size="sm" onClick={() => handleIssue(s.mssv)}>
+                                Phát
+                              </Btn>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {filteredStudents.length > 0 && (
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                <span>Hiển thị <strong className="text-gray-700">{filteredStudents.length}</strong> / {students.length} sinh viên</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="w-10 h-10 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Trang trước"
+                  >
+                    ‹
+                  </button>
+                  {pageNumbers.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setCurrentPage(n)}
+                      className={`w-10 h-10 rounded-lg border text-sm font-semibold transition-colors ${
+                        currentPage === n
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                      aria-label={`Trang ${n}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="w-10 h-10 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Trang sau"
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
             )}
           </div>
-        </div>
-      )}
-      {/* ── Bảng sinh viên ── */}
-      {activeFile && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-full divide-y divide-gray-200 dark:divide-slate-700">
-              <thead className="bg-gray-50 dark:bg-slate-700">
-                <tr>
-                  {columns.map((col) => (
-                    <th
-                      key={col.key}
-                      style={{ width: col.width }}
-                      className="px-6 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                {filteredStudents.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                      Không tìm thấy sinh viên nào
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStudents.map((student, idx) => {
-                    const isIssued = !!student.ngayPhat;
+        )}
 
-                    return (
-                      <tr
-                        key={idx}
-                        className={`hover:bg-gray-50 dark:hover:bg-slate-700/70 transition-colors ${
-                          isIssued ? 'bg-green-50 dark:bg-green-900/10' : ''
-                        }`}
-                      >
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
-                          {student.mssv}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                          {student.hoTen}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {student.diaChi || '—'}
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          {isIssued ? (
-                            <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              Đã phát
-                            </span>
-                          ) : (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => handleIssueSingleCertificate(student.mssv)}
-                              className="text-xs"
-                            >
-                              Phát
-                            </Button>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          {student.ngayPhat || '—'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        {/* ── EMPTY STATE ── */}
+        {fileList.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-dashed border-gray-200 py-20 text-center">
+            <div className="text-6xl mb-4">📂</div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Chưa có dữ liệu</h3>
+            <p className="text-gray-400 text-sm mb-5">Tải lên file Excel để bắt đầu quản lý phát chứng nhận</p>
+            <Btn variant="primary" onClick={() => fileInputRef.current?.click()}>
+              <UploadIcon /> Tải danh sách Excel lên
+            </Btn>
           </div>
-
-          {filteredStudents.length > 0 && (
-            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-700 text-sm text-gray-500 flex justify-between">
-              <span>
-                Hiển thị {filteredStudents.length} / {students.length} sinh viên
-              </span>
-              <span>
-                Đã phát: {students.filter((s) => s.ngayPhat).length} •{' '}
-                Chưa phát: {students.filter((s) => !s.ngayPhat).length}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Empty state ── */}
-      {fileList.length === 0 && (
-        <div className="text-center py-16 text-gray-500">
-          Chưa có file Excel nào được tải lên.
-          <br />
-          Vui lòng nhấn nút <strong>"Tải danh sách Excel lên"</strong> để bắt đầu.
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

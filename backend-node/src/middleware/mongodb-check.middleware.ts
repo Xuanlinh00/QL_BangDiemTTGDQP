@@ -4,18 +4,12 @@ import { logger } from '../config/logger'
 
 /**
  * Middleware to check if MongoDB is connected before processing requests
- * Returns 503 Service Unavailable if MongoDB is not connected
+ * Now allows requests to proceed even if MongoDB is not connected
+ * (graceful degradation)
  */
 export function requireMongoDB(req: Request, res: Response, next: NextFunction) {
   if (mongoose.connection.readyState !== 1) {
-    logger.warn(`MongoDB not connected - rejecting ${req.method} ${req.path}`)
-    return res.status(503).json({
-      success: false,
-      error: {
-        code: 'DATABASE_UNAVAILABLE',
-        message: 'Database connection not available. Please try again later.',
-      },
-    })
+    logger.warn(`MongoDB not connected for ${req.method} ${req.path} - proceeding with limited functionality`)
   }
   next()
 }

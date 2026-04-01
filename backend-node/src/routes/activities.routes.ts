@@ -2,19 +2,20 @@ import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import mongoose from 'mongoose'
 import { CenterActivity } from '../models'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
 
-// MongoDB check for all routes except public ones
-const publicPaths = ['/', '/seed']
+// Require MongoDB for write/auth flows, but allow public reads to degrade gracefully.
 router.use((req, res, next) => {
-  if (publicPaths.includes(req.path) || req.path.match(/^\/[^/]+\/media\/\d+$/)) {
-    return requireMongoDB(req, res, next)
+  const isPublicRead = req.method === 'GET' && (req.path === '/' || /^\/[^/]+\/media\/\d+$/.test(req.path))
+  if (isPublicRead) {
+    return next()
   }
-  requireMongoDB(req, res, next)
+  return requireMongoDB(req, res, next)
 })
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
@@ -53,6 +54,17 @@ function handleMulterError(err: any, _req: Request, res: Response, next: NextFun
 // Public: list activities (exclude media.data for performance, include banner)
 router.get('/', async (_req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({
+        success: true,
+        data: [],
+        meta: {
+          offline: true,
+          message: 'MongoDB is unavailable. Returning empty activities list.',
+        },
+      })
+    }
+
     const items = await CenterActivity.find().sort({ order: 1, createdAt: -1 }).select('-media.data')
     res.json({ success: true, data: items })
   } catch (err: any) {

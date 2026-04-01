@@ -2,12 +2,12 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import mongoose from 'mongoose'
 import { DocumentModel, StudentRecord } from '../models'
-import { requireMongoDB } from '../middleware/mongodb-check.middleware'
+import { optionalMongoDB } from '../middleware/mongodb-check.middleware'
 
 const router = Router()
 
-// All docstore routes require MongoDB
-router.use(requireMongoDB)
+// Make MongoDB optional for docstore routes
+router.use(optionalMongoDB)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }) // 500MB limit
 
 // ── Initialize GridFS buckets ──
@@ -20,6 +20,12 @@ mongoose.connection.on('open', () => {
 // ── List all documents ──
 router.get('/', async (_req: Request, res: Response) => {
   try {
+    const mongoConnected = mongoose.connection.readyState === 1
+    
+    if (!mongoConnected) {
+      return res.json({ success: true, data: [] })
+    }
+
     const docs = await DocumentModel.find({}, { fileData: 0 }).sort({ uploaded_at: -1 })
     res.json({ success: true, data: docs })
   } catch (err: any) {
@@ -33,58 +39,81 @@ router.post('/upload', upload.array('files', 20), async (req: Request, res: Resp
     const files = req.files as Express.Multer.File[]
     if (!files?.length) return res.status(400).json({ success: false, error: 'No files' })
 
-    if (!gridFSBucket) {
-      return res.status(500).json({ success: false, error: 'GridFS not initialized' })
-    }
-
     const { folder, type, academicYear, cohort, className, trainingProgram } = req.body
     const created = []
 
-    for (const f of files) {
-      // Create document record first
-      const doc = await DocumentModel.create({
-        name: Buffer.from(f.originalname, 'latin1').toString('utf8'),
-        folder: folder || '',
-        type: type || '',
-        pages: 0,
-        status: 'Pending',
-        extract_status: 'Pending',
-        uploaded_at: new Date().toISOString().split('T')[0],
-        source: 'local',
-        mimeType: f.mimetype,
-        academicYear,
-        cohort,
-        className,
-        trainingProgram,
-      } as any)
+    // Check if MongoDB is connected
+    const mongoConnected = mongoose.connection.readyState === 1
 
-      // Upload file to GridFS
-      const uploadStream = gridFSBucket.openUploadStream(doc._id.toString(), {
-        metadata: {
-          docId: doc._id.toString(),
-          fileName: f.originalname,
+    if (mongoConnected && gridFSBucket) {
+      // Use MongoDB + GridFS if available
+      for (const f of files) {
+        // Create document record first
+        const doc = await DocumentModel.create({
+          name: Buffer.from(f.originalname, 'latin1').toString('utf8'),
+          folder: folder || '',
+          type: type || '',
+          pages: 0,
+          status: 'Pending',
+          extract_status: 'Pending',
+          uploaded_at: new Date().toISOString().split('T')[0],
+          source: 'local',
           mimeType: f.mimetype,
-          uploadedAt: new Date(),
-        },
-      })
+          academicYear,
+          cohort,
+          className,
+          trainingProgram,
+        } as any)
 
-      uploadStream.on('error', (err) => {
-        console.error('GridFS upload error:', err)
-      })
+        // Upload file to GridFS
+        const uploadStream = gridFSBucket.openUploadStream(doc._id.toString(), {
+          metadata: {
+            docId: doc._id.toString(),
+            fileName: f.originalname,
+            mimeType: f.mimetype,
+            uploadedAt: new Date(),
+          },
+        })
 
-      uploadStream.end(f.buffer)
+        uploadStream.on('error', (err) => {
+          console.error('GridFS upload error:', err)
+        })
 
-      // Wait for upload to complete
-      await new Promise((resolve, reject) => {
-        uploadStream.on('finish', resolve)
-        uploadStream.on('error', reject)
-      })
+        uploadStream.end(f.buffer)
 
-      // Update document with GridFS file ID
-      doc.gridfsFileId = uploadStream.id
-      await doc.save()
+        // Wait for upload to complete
+        await new Promise((resolve, reject) => {
+          uploadStream.on('finish', resolve)
+          uploadStream.on('error', reject)
+        })
 
-      created.push(doc.toObject())
+        // Update document with GridFS file ID
+        doc.gridfsFileId = uploadStream.id
+        await doc.save()
+
+        created.push(doc.toObject())
+      }
+    } else {
+      // Fallback: store files in memory with metadata (no MongoDB)
+      for (const f of files) {
+        created.push({
+          _id: new mongoose.Types.ObjectId(),
+          name: Buffer.from(f.originalname, 'latin1').toString('utf8'),
+          folder: folder || '',
+          type: type || '',
+          pages: 0,
+          status: 'Pending',
+          extract_status: 'Pending',
+          uploaded_at: new Date().toISOString().split('T')[0],
+          source: 'local',
+          mimeType: f.mimetype,
+          academicYear,
+          cohort,
+          className,
+          trainingProgram,
+          fileSize: f.size,
+        })
+      }
     }
 
     res.json({ success: true, data: created })
@@ -189,6 +218,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ── List all student records (optionally filter by docId) ──
 router.get('/student-records', async (req: Request, res: Response) => {
   try {
+    const mongoConnected = mongoose.connection.readyState === 1
+    
+    if (!mongoConnected) {
+      return res.json({ success: true, data: [] })
+    }
+
     const filter = req.query.docId ? { docId: req.query.docId as string } : {}
     const records = await StudentRecord.find(filter).sort({ stt: 1 })
     res.json({ success: true, data: records })

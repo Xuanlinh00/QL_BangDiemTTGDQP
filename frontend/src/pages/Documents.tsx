@@ -91,6 +91,10 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<StoredDocument | null>(null)
   const [editDoc, setEditDoc] = useState<StoredDocument | null>(null)
 
+  const [previewWidth, setPreviewWidth] = useState(400) // Width of preview panel
+  const [isDragging, setIsDragging] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
   const [quickPreviewDoc, setQuickPreviewDoc] = useState<StoredDocument | null>(null)
   const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -132,16 +136,34 @@ export default function Documents() {
     load()
   }, [])
 
-  // Close menu on outside click
+  const handleMouseDown = useCallback(() => {
+    setIsDragging(true)
+  }, [])
+
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setActiveRowMenu(null)
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !containerRef.current) return
+      const container = containerRef.current
+      const rect = container.getBoundingClientRect()
+      const newWidth = rect.right - e.clientX - 12 // 12px for gap
+      if (newWidth > 250 && newWidth < rect.width - 300) {
+        setPreviewWidth(newWidth)
       }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [isDragging])
 
   const q = searchTerm.trim().toLowerCase()
 
@@ -151,16 +173,20 @@ export default function Documents() {
     return Array.from(progs).sort()
   }, [documents])
 
-  const yearFolders = useMemo(() => {
-    const years = new Set<string>()
-    documents.forEach(doc => {
-      const docProg = doc.trainingProgram || ''
-      if (selectedProgram && docProg !== selectedProgram) return
-      const yr = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
-      if (yr) years.add(yr)
+  const programYearsMap = useMemo(() => {
+    const map = new Map<string, string[]>()
+    programFolders.forEach(prog => {
+      const years = new Set<string>()
+      documents.forEach(doc => {
+        if ((doc.trainingProgram || '') === prog) {
+          const yr = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
+          if (yr) years.add(yr)
+        }
+      })
+      map.set(prog, Array.from(years).sort().reverse())
     })
-    return Array.from(years).sort().reverse()
-  }, [documents, selectedProgram])
+    return map
+  }, [documents, programFolders])
 
   const filteredDocuments = useMemo(() => {
     return documents.filter(doc => {
@@ -175,9 +201,12 @@ export default function Documents() {
     })
   }, [documents, selectedProgram, selectedYear, q, filterType])
 
-  const matchedStudents = q === '' ? [] : studentRecords.filter(
-    r => r.ho_ten.toLowerCase().includes(q) || r.mssv.toLowerCase().includes(q) || r.lop.toLowerCase().includes(q)
-  )
+  const matchedStudents = useMemo(() => {
+    if (q === '') return []
+    return studentRecords.filter(
+      r => r.ho_ten.toLowerCase().includes(q) || r.mssv.toLowerCase().includes(q) || r.lop.toLowerCase().includes(q)
+    )
+  }, [studentRecords, q])
 
   // ── Handlers (unchanged logic) ──────────────────────────────────────────────
   const handleUploadFiles = useCallback(async (
@@ -298,18 +327,20 @@ export default function Documents() {
     }
   }, [ocrReviewDoc])
 
-  const countDocsForYear = (year: string) =>
-    documents.filter(doc => {
+  const countDocsForYear = (year: string, prog?: string) => {
+    const targetProg = prog || selectedProgram
+    return documents.filter(doc => {
       const docProg = doc.trainingProgram || ''
-      const matchesProg = !selectedProgram || docProg === selectedProgram
+      const matchesProg = !targetProg || docProg === targetProg
       const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
       return matchesProg && docYear === year
     }).length
+  }
 
   const countDocsForProgram = (prog: string) =>
     documents.filter(doc => (doc.trainingProgram || '') === prog).length
 
-  const highlight = (text: string) => {
+  const highlight = useCallback((text: string) => {
     if (!q) return text
     const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     return text.split(new RegExp(`(${esc})`, 'gi')).map((part, i) =>
@@ -317,7 +348,7 @@ export default function Documents() {
         ? <mark key={i} className="bg-amber-200 dark:bg-amber-700/60 text-gray-900 dark:text-white rounded px-0.5">{part}</mark>
         : part
     )
-  }
+  }, [q])
 
   // ── Loading state ────────────────────────────────────────────────────────────
   if (loading) return (
@@ -334,22 +365,33 @@ export default function Documents() {
   return (
     <div className="flex flex-col gap-5 h-full" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
-      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-slate-500 mb-1">
-            <span>Quản lý</span>
-            <span>›</span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-medium">Bảng điểm</span>
-            {selectedProgram && <><span>›</span><span className="text-gray-600 dark:text-slate-300 font-medium">{selectedProgram}</span></>}
-            {selectedYear && <><span>›</span><span className="text-gray-600 dark:text-slate-300 font-medium">Năm {selectedYear}</span></>}
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-            Quản lý Bảng điểm
-          </h1>
-          <p className="text-sm text-gray-400 dark:text-slate-500 mt-0.5">
-            {filteredDocuments.length} tài liệu{selectedProgram ? ` trong ${selectedProgram}` : ''}
-          </p>
+      {/* ── Top bar with Program filter ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Program filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => { setSelectedProgram(null); setSelectedYear(null) }}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              !selectedProgram
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+            }`}
+          >
+            Tất cả
+          </button>
+          {programFolders.map(prog => (
+            <button
+              key={prog}
+              onClick={() => { setSelectedProgram(prog); setSelectedYear(null) }}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedProgram === prog
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+              }`}
+            >
+              {prog}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -380,124 +422,150 @@ export default function Documents() {
         </div>
       </div>
 
-      {/* ── Program & Year filter ────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-        {/* Program tabs */}
-        <div className="flex items-center gap-1 px-4 pt-3 pb-0 overflow-x-auto">
-          <button
-            onClick={() => { setSelectedProgram(null); setSelectedYear(null) }}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-              !selectedProgram
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/60 dark:bg-indigo-900/20'
-                : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-            </svg>
-            Tất cả
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${!selectedProgram ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
-              {documents.length}
-            </span>
-          </button>
-          {programFolders.map(prog => (
-            <button
-              key={prog}
-              onClick={() => { setSelectedProgram(prog); setSelectedYear(null) }}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                selectedProgram === prog
-                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/60 dark:bg-indigo-900/20'
-                  : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
-              }`}
-            >
-              🎓 {prog}
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${selectedProgram === prog ? 'bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
-                {countDocsForProgram(prog)}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <div className="h-px bg-gray-100 dark:bg-slate-700 mx-4" />
-
-        {/* Year pills */}
-        {selectedProgram && yearFolders.length > 0 ? (
-          <div className="flex items-center gap-2 px-4 py-2.5 flex-wrap">
-            <span className="text-xs text-gray-400 dark:text-slate-500 font-medium mr-1">Năm học:</span>
+      {/* ── Year filter bar (appears below when program selected) ────────────────────────────────────────────── */}
+      {selectedProgram && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setSelectedYear(null)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${!selectedYear ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                !selectedYear
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+              }`}
             >
               Tất cả
             </button>
-            {yearFolders.map(year => (
-              <div key={year} className="flex items-center gap-0.5">
-                <button
-                  onClick={() => setSelectedYear(year)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${selectedYear === year ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
-                >
-                  {year} <span className="opacity-70">({countDocsForYear(year)})</span>
-                </button>
-                <button
-                  onClick={async () => {
-                    const count = documents.filter(doc => {
-                      const docProg = doc.trainingProgram || ''
-                      const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
-                      return docProg === selectedProgram && docYear === year
-                    }).length
-                    if (!window.confirm(`Xóa tất cả ${count} tài liệu của năm ${year}?`)) return
-                    try {
-                      const docsToDelete = documents.filter(doc => {
-                        const docProg = doc.trainingProgram || ''
-                        const docYear = doc.academicYear || doc.uploaded_at?.substring(0, 4) || ''
-                        return docProg === selectedProgram && docYear === year
-                      })
-                      for (const doc of docsToDelete) await docstoreApi.delete(doc._id)
-                      setDocuments(prev => prev.filter(d => !docsToDelete.some(del => del._id === d._id)))
-                      setStudentRecords(prev => prev.filter(r => !docsToDelete.some(d => d._id === r.docId)))
-                      setSelectedYear(null)
-                      toast.success(`Đã xóa ${count} tài liệu của năm ${year}`)
-                    } catch (e) { console.error(e); toast.error('Xóa thất bại') }
-                  }}
-                  className="p-1 rounded-full text-gray-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  title={`Xóa năm ${year}`}
-                >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
-              </div>
-            ))}
-            <div className="ml-auto">
+            {programYearsMap.get(selectedProgram)?.map(year => (
               <button
-                onClick={async () => {
-                  const count = documents.filter(doc => (doc.trainingProgram || '') === selectedProgram).length
-                  if (!window.confirm(`Xóa tất cả ${count} tài liệu của chương trình "${selectedProgram}"?`)) return
-                  try {
-                    const docsToDelete = documents.filter(doc => (doc.trainingProgram || '') === selectedProgram)
-                    for (const doc of docsToDelete) await docstoreApi.delete(doc._id)
-                    setDocuments(prev => prev.filter(d => (d.trainingProgram || '') !== selectedProgram))
-                    setStudentRecords(prev => prev.filter(r => !docsToDelete.some(d => d._id === r.docId)))
-                    setSelectedProgram(null); setSelectedYear(null)
-                    toast.success(`Đã xóa ${count} tài liệu`)
-                  } catch (e) { console.error(e); toast.error('Xóa thất bại') }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800/40 transition-colors"
+                key={year}
+                onClick={() => setSelectedYear(year)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  selectedYear === year
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                Xóa toàn bộ CTĐT
+                {year}
               </button>
-            </div>
+            ))}
           </div>
-        ) : (
-          <div className="px-4 py-2.5">
-            <p className="text-xs text-gray-400 dark:text-slate-500 italic">
-              {selectedProgram ? 'Không có dữ liệu năm học.' : 'Chọn một chương trình để lọc theo năm học.'}
-            </p>
+
+          {/* Result count */}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">
+              {filteredDocuments.length} tài liệu
+            </span>
           </div>
-        )}
+        </div>
+      )}
+
+      {!selectedProgram && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">
+            {filteredDocuments.length} tài liệu
+          </span>
+        </div>
+      )}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">Cây thư mục</h3>
+          
+          {/* All button */}
+          <button
+            onClick={() => { setSelectedProgram(null); setSelectedYear(null) }}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-2 ${
+              !selectedProgram
+                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+            </svg>
+            <span className="flex-1 text-left">Tất cả tài liệu</span>
+            <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded-md font-semibold">
+              {documents.length}
+            </span>
+          </button>
+
+          {/* Program tree */}
+          <div className="space-y-1">
+            {programFolders.map(prog => {
+              const progCount = countDocsForProgram(prog)
+              const progYears = programYearsMap.get(prog) || []
+              const isProgSelected = selectedProgram === prog
+              
+              return (
+                <div key={prog} className="space-y-0.5">
+                  {/* Program button */}
+                  <button
+                    onClick={() => { setSelectedProgram(prog); setSelectedYear(null) }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isProgSelected
+                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7a2 2 0 012-2h14a2 2 0 012 2m0 0V5a2 2 0 00-2-2H5a2 2 0 00-2 2v2m0 0h16"/>
+                    </svg>
+                    <span className="flex-1 text-left">{prog}</span>
+                    <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded-md font-semibold">
+                      {progCount}
+                    </span>
+                  </button>
+
+                  {/* Year sub-items */}
+                  {isProgSelected && progYears.length > 0 && (
+                    <div className="ml-4 space-y-0.5 border-l border-gray-200 dark:border-slate-700 pl-2">
+                      <button
+                        onClick={() => setSelectedYear(null)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          !selectedYear
+                            ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                            : 'text-gray-500 dark:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span className="flex-1 text-left">Tất cả năm</span>
+                        <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-semibold">
+                          {progYears.reduce((sum, yr) => sum + countDocsForYear(yr, prog), 0)}
+                        </span>
+                      </button>
+
+                      {progYears.map(year => {
+                        const yearCount = countDocsForYear(year, prog)
+                        const isYearSelected = selectedYear === year
+                        return (
+                          <button
+                            key={year}
+                            onClick={() => setSelectedYear(year)}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              isYearSelected
+                                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                                : 'text-gray-500 dark:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+                            }`}
+                          >
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <span className="flex-1 text-left">Năm {year}</span>
+                            <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-semibold">
+                              {yearCount}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ── Search bar ──────────────────────────────────────────────────────── */}
@@ -588,10 +656,10 @@ export default function Documents() {
       </div>
 
       {/* ── Main content: table + side preview ──────────────────────────────── */}
-      <div className="flex gap-3 min-h-0" style={{ height: 'calc(100vh - 20rem)', minHeight: '400px' }}>
+      <div ref={containerRef} className="flex gap-3 min-h-0" style={{ height: 'calc(100vh - 20rem)', minHeight: '400px' }}>
 
         {/* Document table */}
-        <div className={`flex flex-col bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden transition-all duration-200 ${quickPreviewDoc ? 'w-[300px] flex-shrink-0' : 'w-full'}`}>
+        <div className={`flex flex-col bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden transition-all duration-200 ${quickPreviewDoc ? 'flex-1 min-w-0' : 'w-full'}`}>
           {/* Table header */}
           <div className="flex-shrink-0 bg-gray-50/80 dark:bg-slate-700/40 border-b border-gray-100 dark:border-slate-700">
             <table className="w-full text-sm">
@@ -780,9 +848,18 @@ export default function Documents() {
           )}
         </div>
 
+        {/* ── Resizable divider ────────────────────────────────────────────── */}
+        {quickPreviewDoc && (
+          <div
+            onMouseDown={handleMouseDown}
+            className={`w-1 bg-gray-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors flex-shrink-0 ${isDragging ? 'bg-indigo-500 dark:bg-indigo-400' : ''}`}
+            title="Kéo để điều chỉnh kích cỡ"
+          />
+        )}
+
         {/* ── Quick preview panel ────────────────────────────────────────────── */}
         {quickPreviewDoc && (
-          <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-slate-800 rounded-2xl border border-indigo-200 dark:border-indigo-700/50 shadow-sm overflow-hidden transition-all">
+          <div className="flex-shrink-0 flex flex-col bg-white dark:bg-slate-800 rounded-2xl border border-indigo-200 dark:border-indigo-700/50 shadow-sm overflow-hidden transition-all" style={{ width: `${previewWidth}px` }}>
             {/* Panel header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-indigo-50/60 dark:bg-indigo-900/20 flex-shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -841,7 +918,6 @@ export default function Documents() {
           docName={ocrReviewDoc.name}
           docId={ocrReviewDoc._id}
           docType={(ocrReviewDoc.type as 'DSGD' | 'QD' | 'BieuMau') || 'DSGD'}
-          workerUrl="http://localhost:8000"
           onSave={handleOCRSave}
         />
       )}

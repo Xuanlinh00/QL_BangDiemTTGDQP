@@ -6,10 +6,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Trang chủ',
   '/about': 'Trang chủ',
-  '/documents': 'Quản lý Bảng điểm',
-  '/decisions': 'Quản lý Quyết định',
-  '/certificates': 'Quản lý Cấp chứng chỉ',
-  '/activities': 'Quản lý Hoạt động',
+  '/documents': 'Bảng điểm',
+  '/decisions': 'Quyết định',
+  '/certificates': 'Cấp chứng chỉ',
+  '/activities': 'Hoạt động',
   '/settings': 'Cài đặt',
 }
 
@@ -41,7 +41,7 @@ export default function Header() {
   }
 
   return (
-    <header className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+    <header className="fixed top-0 left-[240px] right-0 h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-6 flex items-center justify-between z-40 shadow-sm">
       {/* Left: Title */}
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-bold text-primary-900 dark:text-white">

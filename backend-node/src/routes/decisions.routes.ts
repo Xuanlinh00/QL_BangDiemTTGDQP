@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import mongoose from 'mongoose'
 import { DecisionFile, DecisionFolder } from '../models'
 import { requireMongoDB } from '../middleware/mongodb-check.middleware'
 
@@ -24,6 +25,13 @@ function getFilePath(docId: string, ext: string = '.pdf'): string {
 // ── List all decisions (optionally filter by year) ──
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const mongoConnected = mongoose.connection.readyState === 1
+    
+    if (!mongoConnected) {
+      // Return empty list if MongoDB not connected
+      return res.json({ success: true, data: [] })
+    }
+
     const filter: any = {}
     if (req.query.year) filter.year = req.query.year
     const files = await DecisionFile.find(filter).select('-fileData').sort({ fileName: 1 })
@@ -185,6 +193,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ── Folders ──
 router.get('/folders', async (_req: Request, res: Response) => {
   try {
+    const mongoConnected = mongoose.connection.readyState === 1
+    
+    if (!mongoConnected) {
+      return res.json({ success: true, data: [] })
+    }
+
     const folders = await DecisionFolder.find().sort({ name: -1 })
     res.json({ success: true, data: folders })
   } catch (err: any) {
