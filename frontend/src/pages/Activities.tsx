@@ -452,7 +452,7 @@ export default function Activities() {
   }
 
   return (
-    <div className={`${showEditor ? 'pt-6 pb-6 pl-6 pr-0' : 'p-6'} bg-gray-50 dark:bg-slate-900 min-h-screen`}>
+    <div className={`${showEditor ? 'pt-6 pb-6 pl-6 pr-0' : 'p-6'} bg-gray-50 dark:bg-slate-900 min-h-screen animate-fade-in`}>
 
       {/* ── LIST VIEW ─────────────────────────────────────────────────────── */}
       {!showEditor && (
@@ -544,10 +544,10 @@ export default function Activities() {
 
       {/* ── EDITOR VIEW ───────────────────────────────────────────────────── */}
       {showEditor && (
-        <div className="mt-2 -mr-6 flex gap-4 min-h-[calc(100vh-120px)] items-start">
+        <div className="mt-2 -mr-6 flex gap-4 flex-1 items-start overflow-hidden">
 
           {/* ── Left: Editor ────────────────────────────────────────────── */}
-          <div className="flex-1 min-w-0 min-h-[calc(100vh-120px)] flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">

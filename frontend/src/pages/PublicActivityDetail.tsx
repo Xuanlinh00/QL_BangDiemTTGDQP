@@ -1,6 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { activitiesApi } from '../services/api'
+import PublicLayout from '../components/Layout/PublicLayout'
+import { useSettings } from '../hooks/useSettings'
 
 interface MediaItem {
   _id: string
@@ -77,6 +79,11 @@ export default function PublicActivityDetail() {
     allMedia: Array<{ type: 'image' | 'video'; url: string }>
     currentIndex: number
   } | null>(null)
+  const { getSetting } = useSettings()
+
+  // Get settings
+  const primaryColor = getSetting('color_header', '#2B3A9F')
+  const linkColor = getSetting('color_link', '#2563eb')
 
   useEffect(() => {
     const loadActivity = async () => {
@@ -126,74 +133,82 @@ export default function PublicActivityDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-slate-400">Đang tải...</p>
+      <PublicLayout title="CHI TIẾT HOẠT ĐỘNG">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: primaryColor }}></div>
+            <p className="text-gray-600 dark:text-slate-400">Đang tải...</p>
+          </div>
         </div>
-      </div>
+      </PublicLayout>
     )
   }
 
   if (!activity) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Không tìm thấy bài đăng</p>
-          <button
-            onClick={() => navigate('/gioi-thieu')}
-            className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
-          >
-            Quay lại
-          </button>
+      <PublicLayout title="CHI TIẾT HOẠT ĐỘNG">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-gray-600 dark:text-slate-400 mb-4">Không tìm thấy bài đăng</p>
+            <button
+              onClick={() => navigate('/hoat-dong')}
+              className="px-6 py-2 text-white rounded-lg transition-colors"
+              style={{ backgroundColor: primaryColor }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              Quay lại
+            </button>
+          </div>
         </div>
-      </div>
+      </PublicLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <button
-            onClick={() => navigate('/gioi-thieu')}
-            className="flex items-center gap-2 text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Quay lại
-          </button>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Chi tiết bài đăng</h1>
-          <div className="w-20"></div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <PublicLayout title={activity.title}>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fade-in">
+        {/* Back button */}
+        <button
+          onClick={() => navigate('/hoat-dong')}
+          className="flex items-center gap-2 font-medium transition-colors mb-8"
+          style={{ color: linkColor }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Quay lại danh sách
+        </button>
         {/* Title Section */}
         <div className="mb-8">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="flex-1">
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
-                {activity.title}
-              </h1>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(activity.category)}`}>
-                  {getCategoryLabel(activity.category)}
-                </span>
-                {activity.createdAt && (
-                  <span className="text-gray-600 dark:text-slate-400">
-                    {new Date(activity.createdAt).toLocaleDateString('vi-VN', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                    })}
-                  </span>
-                )}
-              </div>
-            </div>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            {activity.title}
+          </h1>
+          
+          {activity.description && (
+            <p className="text-lg text-gray-600 dark:text-slate-400 mb-4 leading-relaxed">
+              {activity.description}
+            </p>
+          )}
+          
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`px-4 py-2 rounded-full text-sm font-medium ${getCategoryColor(activity.category)}`}>
+              {getCategoryLabel(activity.category)}
+            </span>
+            {activity.createdAt && (
+              <span className="text-gray-600 dark:text-slate-400 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {new Date(activity.createdAt).toLocaleDateString('vi-VN', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
+              </span>
+            )}
           </div>
         </div>
 
@@ -339,6 +354,6 @@ export default function PublicActivityDetail() {
           </div>
         </div>
       )}
-    </div>
+    </PublicLayout>
   )
 }

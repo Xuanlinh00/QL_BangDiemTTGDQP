@@ -12,7 +12,7 @@ export default function MainLayout() {
       <Sidebar />
       <Header />
       <main className="ml-[240px] mt-16 h-[calc(100vh-64px)] overflow-hidden">
-          <div className="h-full overflow-y-auto p-4 lg:p-6">
+          <div className="h-full overflow-y-auto p-6">
             <Outlet />
           </div>
         </main>

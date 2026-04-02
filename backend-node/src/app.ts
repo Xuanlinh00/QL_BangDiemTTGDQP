@@ -11,6 +11,7 @@ import decisionsRoutes from './routes/decisions.routes'
 import dataRoutes from './routes/data.routes'
 import reportsRoutes from './routes/reports.routes'
 import settingsRoutes from './routes/settings.routes'
+import aboutSectionsRoutes from './routes/about-sections.routes'
 import docstoreRoutes from './routes/docstore.routes'
 import activitiesRoutes from './routes/activities.routes'
 
@@ -27,6 +28,9 @@ app.use(cors({
 }))
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'))
 
 // Rate limiting
 app.use('/api/', apiLimiter)
@@ -45,6 +49,7 @@ app.use('/api/decisions', decisionsRoutes)
 app.use('/api/data', dataRoutes)
 app.use('/api/reports', reportsRoutes)
 app.use('/api/settings', settingsRoutes)
+app.use('/api/about-sections', aboutSectionsRoutes)
 app.use('/api/docstore', docstoreRoutes)
 app.use('/api/activities', activitiesRoutes)
 

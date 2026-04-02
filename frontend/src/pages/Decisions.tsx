@@ -65,6 +65,15 @@ export default function Decisions() {
   const [showEditFileModal, setShowEditFileModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Resizable preview panel
+  const [previewWidth, setPreviewWidth] = useState(400)
+  const [isDragging, setIsDragging] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 20
+
   // Load data from API on mount
   useEffect(() => {
     async function load() {
@@ -77,7 +86,7 @@ export default function Decisions() {
         setCustomFolders(foldersRes.data.data || [])
       } catch (e) {
         console.error('Failed to load decisions:', e)
-        toast.error('Không thể tải dữ liệu quyết định')
+toast.error('Không thể tải dữ liệu quyết định')
       } finally {
         setLoading(false)
       }
@@ -131,18 +140,84 @@ export default function Decisions() {
     return []
   }, [path, folderTree, files, searchTerm])
 
+  // Pagination for file list
+  const totalPages = useMemo(() => {
+    if (path.length !== 1) return 1 // Only paginate file list
+    return Math.max(1, Math.ceil(currentItems.length / pageSize))
+  }, [currentItems.length, path.length, pageSize])
+
+  const paginatedItems = useMemo(() => {
+    if (path.length !== 1) return currentItems // Only paginate file list
+    const start = (currentPage - 1) * pageSize
+    return currentItems.slice(start, start + pageSize)
+  }, [currentItems, currentPage, pageSize, path.length])
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1)
+    }
+    if (currentPage <= 3) return [1, 2, 3, 4, 5]
+    if (currentPage >= totalPages - 2) return [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    return [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2]
+  }, [currentPage, totalPages])
+
+  // Reset to page 1 when path or search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [path, searchTerm])
+
+  // Adjust current page if it exceeds total pages
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
+
   // ── Navigation ──
   const navigateTo = (name: string) => setPath(prev => [...prev, name])
   const navigateBack = () => {
     setPath(prev => prev.slice(0, -1))
     setSelectedFile(null)
-    setPreviewUrl(null)
+setPreviewUrl(null)
   }
   const navigateToBreadcrumb = (index: number) => {
     setPath(prev => prev.slice(0, index))
     setSelectedFile(null)
     setPreviewUrl(null)
   }
+
+  // ── Resize handlers ──
+  const handleMouseDown = useCallback(() => {
+    setIsDragging(true)
+  }, [])
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !containerRef.current) return
+      const container = containerRef.current
+      const rect = container.getBoundingClientRect()
+      const newWidth = rect.right - e.clientX - 12 // 12px for gap
+      if (newWidth > 250 && newWidth < rect.width - 300) {
+        setPreviewWidth(newWidth)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isDragging])
 
   // ── File selection & preview ──
   // ── Single click → quick preview in side panel ──
@@ -187,7 +262,7 @@ export default function Decisions() {
       const msg = e?.response?.data?.error || 'Tải lên thất bại'
       const skipped: string[] = e?.response?.data?.skipped || []
       if (status === 409) {
-        toast(`${skipped.length} file đã tồn tại, bỏ qua`, { icon: '⚠️' })
+toast(`${skipped.length} file đã tồn tại, bỏ qua`, { icon: '⚠️' })
         setShowAddFileModal(false)
       } else {
         toast.error(msg)
@@ -230,24 +305,43 @@ export default function Decisions() {
 
   // ── Delete year folder ──
   const handleDeleteFolder = useCallback(async (year: string) => {
-    const yearFiles = files.filter(f => f.year === year)
-    if (yearFiles.length > 0) {
-      toast.error(`Không thể xóa năm ${year} vì còn ${yearFiles.length} file`)
-      return
-    }
     if (!window.confirm(`Bạn có chắc chắn muốn xóa năm ${year}?`)) return
     const folder = customFolders.find(cf => cf.name === year)
-    if (folder) {
-      try {
-        await decisionsApi.deleteFolder(folder._id)
-        setCustomFolders(prev => prev.filter(cf => cf.name !== year))
-        toast.success(`Đã xóa năm ${year}`)
-      } catch (e) {
-        console.error('Delete folder failed:', e)
-        toast.error('Xóa năm thất bại')
+    const yearFiles = files.filter(f => f.year === year)
+    
+    try {
+      // Delete all files in this year first
+      for (const file of yearFiles) {
+        try {
+          await decisionsApi.delete(file._id)
+        } catch (e) {
+          console.error(`Failed to delete file ${file._id}:`, e)
+        }
       }
+      
+      // Then delete the folder
+      if (folder) {
+        try {
+          await decisionsApi.deleteFolder(folder._id)
+          console.log(`Folder ${folder._id} deleted successfully`)
+        } catch (e) {
+          console.error(`Failed to delete folder ${folder._id}:`, e)
+          // Even if folder deletion fails, we've deleted the files, so update state
+        }
+      }
+      
+      // Update state - remove the year and all its files
+      setCustomFolders(prev => prev.filter(cf => cf.name !== year))
+      setFiles(prev => prev.filter(f => f.year !== year))
+      setPath([])
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      toast.success(`Đã xóa năm ${year}`)
+    } catch (e) {
+      console.error('Delete folder failed:', e)
+      toast.error('Xóa năm thất bại')
     }
-  }, [files, customFolders])
+  }, [customFolders, files])
 
   // ── Rename year folder ──
   const handleRenameFolder = useCallback(async (oldYear: string, newYear: string) => {
@@ -267,7 +361,7 @@ export default function Decisions() {
       const folder = customFolders.find(cf => cf.name === oldYear)
       if (folder) {
         await decisionsApi.renameFolder(folder._id, newYear)
-        setCustomFolders(prev => prev.map(cf => cf.name === oldYear ? { ...cf, name: newYear } : cf))
+setCustomFolders(prev => prev.map(cf => cf.name === oldYear ? { ...cf, name: newYear } : cf))
       }
 
       if (path[0] === oldYear) setPath([newYear])
@@ -311,72 +405,48 @@ export default function Decisions() {
   const addButtonLabel = path.length === 0 ? 'Thêm năm' : 'Thêm file quyết định'
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] gap-0 max-w-full overflow-hidden -mt-2">
+    <div className="flex flex-col h-full gap-4">
+      {/* ═══════════════════ TOP BAR: Search and Add Button ═══════════════════ */}
+      <div className="flex items-center gap-3 px-1">
+        {/* Search Input */}
+        <div className="flex-1 relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <input
+            type="text"
+            placeholder="Tìm kiếm..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg pl-10 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500"
+          />
+        </div>
+
+        {/* Add Button */}
+        <button
+          onClick={() => path.length === 1 ? setShowAddFileModal(true) : setShowAddFolderModal(true)}
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          {addButtonLabel}
+        </button>
+      </div>
+
+      {/* ═══════════════════ MAIN CONTENT ═══════════════════ */}
+      <div ref={containerRef} className="flex h-full gap-3 max-w-full overflow-hidden min-h-0">
       {/* ═══════════════════ LEFT PANEL: File Explorer ═══════════════════ */}
-      <div className={`flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm transition-all duration-300 ${selectedFile ? 'hidden' : 'w-full'}`}>
-        {/* Explorer Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow">
-              QĐ
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm lg:text-base font-bold text-gray-900 dark:text-white truncate">Quản lý Quyết định</h1>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">{stats.totalFiles} file &bull; {stats.totalSize}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => path.length === 1 ? setShowAddFileModal(true) : setShowAddFolderModal(true)}
-              className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              {addButtonLabel}
-            </button>
-          </div>
-        </div>
-
-        {/* Breadcrumb + Search */}
-        <div className="px-4 py-2 border-b border-gray-50 dark:border-slate-700/50 shrink-0 space-y-2">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1 text-sm overflow-x-auto">
-            <button
-              onClick={() => { setPath([]); setSelectedFile(null); setPreviewUrl(null) }}
-              className="flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-medium whitespace-nowrap shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-              Quyết định
-            </button>
-            {path.map((segment, i) => (
-              <span key={i} className="flex items-center gap-1 shrink-0">
-                <svg className="w-3.5 h-3.5 text-gray-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                <button
-                  onClick={() => navigateToBreadcrumb(i + 1)}
-                  className={`font-medium whitespace-nowrap ${i === path.length - 1 ? 'text-gray-800 dark:text-white' : 'text-primary-600 dark:text-primary-400 hover:text-primary-800'}`}
-                >
-                  {`Năm ${segment}`}
-                </button>
-              </span>
-            ))}
-          </div>
-
-          {/* Search bar */}
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input
-              type="text"
-              placeholder="Tìm kiếm..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg pl-9 pr-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary-400 text-gray-700 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500"
-            />
-          </div>
-        </div>
+      <div className={`flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm transition-all duration-300 ${selectedFile ? 'flex-1' : 'w-full'}`}>
 
         {/* Column header (file list mode) */}
         {path.length === 1 && (
-          <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-4 py-2 text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider border-b border-gray-100 dark:border-slate-700 shrink-0">
+          <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-2 px-4 py-3 text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide border-b border-gray-100 dark:border-slate-700 shrink-0 items-center">
+            <button
+              onClick={navigateBack}
+              className="w-8 h-8 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors shrink-0"
+              title="Quay lại"
+            >
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" /></svg>
+            </button>
             <span>Tên file</span>
+            <span className="w-20 text-center">Ngày</span>
             <span className="w-16 text-center">Kích thước</span>
             <span className="w-10 text-center">Xóa</span>
           </div>
@@ -386,7 +456,7 @@ export default function Decisions() {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-slate-500 py-12">
-              <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-sm">Đang tải...</p>
             </div>
           ) : currentItems.length === 0 ? (
@@ -397,26 +467,13 @@ export default function Decisions() {
             </div>
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-slate-700/30">
-              {/* Back button */}
-              {path.length > 0 && (
-                <button
-                  onClick={navigateBack}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors text-left group"
-                >
-                  <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center group-hover:bg-gray-200 dark:group-hover:bg-slate-600 transition-colors">
-                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" /></svg>
-                  </div>
-                  <span className="text-sm text-gray-500 dark:text-slate-400 font-medium">..</span>
-                </button>
-              )}
-
-              {currentItems.map((item, idx) => (
+              {paginatedItems.map((item, idx) => (
                 item.type === 'folder' ? (
                   <div
                     key={`folder-${item.name}`}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50/50 dark:hover:bg-slate-750 transition-all text-left group animate-fade-in-up cursor-pointer"
                     style={{ animationDelay: `${idx * 30}ms` }}
-                    onClick={() => navigateTo(item.name)}
+onClick={() => navigateTo(item.name)}
                   >
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center shadow-sm ${
                       'bg-gradient-to-br from-amber-400 to-amber-600'
@@ -424,54 +481,55 @@ export default function Decisions() {
                       <FolderIcon className="w-4.5 h-4.5 text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
+                      <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
                         {item.label}
                       </p>
                       <p className="text-[11px] text-gray-400 dark:text-slate-500">{item.count} file</p>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={e => { e.stopPropagation(); const newYear = prompt('Đổi tên năm:', item.name); if (newYear && newYear !== item.name) handleRenameFolder(item.name, newYear) }}
-                        className="p-1 text-gray-400 hover:text-blue-500 rounded"
+                        className="p-1 text-gray-400 hover:text-blue-500 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Đổi tên"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDeleteFolder(item.name) }}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded"
+                        className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
                         title="Xóa năm"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                     </div>
-                    <svg className="w-4 h-4 text-gray-300 dark:text-slate-600 group-hover:text-primary-400 transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    <svg className="w-4 h-4 text-gray-300 dark:text-slate-600 group-hover:text-indigo-400 transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                   </div>
                 ) : (
                   <div
                     role="button"
                     key={item.type === 'file' && item.file?._id ? item.file._id : `file-${idx}`}
                     onClick={() => item.type === 'file' && item.file && handleFileClick(item.file)}
-                    onDoubleClick={() => item.type === 'file' && item.file && handleFileDoubleClick(item.file)}
+onDoubleClick={() => item.type === 'file' && item.file && handleFileDoubleClick(item.file)}
                     className={`w-full px-4 py-2.5 hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-all text-left group animate-fade-in-up cursor-pointer ${
-                      selectedFile?._id === (item as any).file?._id ? 'bg-primary-50 dark:bg-primary-900/20 border-l-3 border-primary-500' : ''
+                      selectedFile?._id === (item as any).file?._id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-l-3 border-indigo-500' : ''
                     }`}
                     style={{ animationDelay: `${idx * 30}ms` }}
                   >
                     {path.length === 1 && item.type === 'file' && item.file ? (
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                  <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-2 items-center">
+                        <div className="w-8 h-8" />
                         <div className="flex items-center gap-3 min-w-0">
                           <PdfIcon className="w-8 h-8 shrink-0" />
-                          <div className="min-w-0">
-                            <p className={`text-sm font-medium truncate ${
-                              selectedFile?._id === item.file._id ? 'text-primary-700 dark:text-primary-300' : 'text-gray-800 dark:text-slate-200'
-                            }`}>
-                              {item.file.fileName}
-                            </p>
-                            <p className="text-[10px] text-gray-400 dark:text-slate-500">Tải lên: {item.file.uploadedAt}</p>
-                          </div>
+                          <p className={`text-sm font-medium truncate ${
+                            selectedFile?._id === item.file._id ? 'text-primary-700 dark:text-primary-300' : 'text-gray-800 dark:text-slate-200'
+                          }`}>
+                            {item.file.fileName}
+                          </p>
                         </div>
-                        <span className="w-16 text-center text-[10px] text-gray-500 dark:text-slate-400">
+                        <span className="w-20 text-center text-[11px] text-gray-500 dark:text-slate-400">
+                          {item.file.uploadedAt}
+                        </span>
+                        <span className="w-16 text-center text-[11px] text-gray-500 dark:text-slate-400">
                           {formatFileSize(item.file.fileSize)}
                         </span>
                         <span className="w-10 flex justify-center">
@@ -495,56 +553,89 @@ export default function Decisions() {
               ))}
             </div>
           )}
-        </div>
+</div>
 
-        {/* Bottom bar: Stats */}
-        <div className="px-4 py-2.5 border-t border-gray-100 dark:border-slate-700 shrink-0 flex items-center justify-between text-[11px] text-gray-400 dark:text-slate-500 bg-gray-50/50 dark:bg-slate-800/50">
-          <span>{currentItems.length} mục &bull; {stats.totalFiles} file tổng</span>
-          <span>{stats.totalSize}</span>
-        </div>
       </div>
+
+      {/* ═══════════════════ RESIZE DIVIDER ═══════════════════ */}
+      {selectedFile && (
+        <div
+          onMouseDown={handleMouseDown}
+className={`w-1 bg-gray-200 dark:bg-slate-700 hover:bg-indigo-400 dark:hover:bg-indigo-500 cursor-col-resize transition-colors shrink-0 ${
+            isDragging ? 'bg-indigo-500' : ''
+          }`}
+          style={{ touchAction: 'none' }}
+        />
+      )}
 
       {/* ═══════════════════ RIGHT PANEL: File Preview ═══════════════════ */}
       {selectedFile && (
-        <div className="w-full flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm ml-0 overflow-hidden animate-slide-in-left">
+        <div 
+          className="flex flex-col bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden animate-slide-in-left"
+          style={{ width: `${previewWidth}px` }}
+        >
           {/* Preview header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700 shrink-0 bg-gray-50 dark:bg-slate-800/50">
             <div className="flex items-center gap-4 min-w-0">
               <PdfIcon className="w-10 h-10 shrink-0" />
               <div className="min-w-0">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate">{selectedFile.fileName}</h3>
-                <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-                  {selectedFile.number ? `QĐ ${selectedFile.number}` : ''}{selectedFile.number && selectedFile.uploadedAt ? ' • ' : ''}{selectedFile.uploadedAt ? `Tải lên: ${selectedFile.uploadedAt}` : ''}{selectedFile.fileSize ? ` • ${formatFileSize(selectedFile.fileSize)}` : ''}
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">{selectedFile.fileName}</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  {selectedFile.number ? `QĐ ${selectedFile.number}` : ''}{selectedFile.number && selectedFile.uploadedAt ? ' • ' : ''}{selectedFile.uploadedAt ? `${selectedFile.uploadedAt}` : ''}{selectedFile.fileSize ? ` • ${formatFileSize(selectedFile.fileSize)}` : ''}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Full view */}
-              <button
-                onClick={() => { setFullPreviewFile(selectedFile); setFullPreviewUrl(decisionsApi.getFileUrl(selectedFile._id)) }}
-                className="px-4 py-2 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-800/30 text-green-700 dark:text-green-400 text-sm font-medium rounded-lg transition-colors"
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Download */}
+              <a
+                href={decisionsApi.getFileUrl(selectedFile._id)}
+                download={selectedFile.fileName}
+                className="p-2 text-gray-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                title="Tải xuống"
               >
-                Xem đầy đủ
-              </button>
-              {/* Edit */}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              </a>
+              {/* Print */}
               <button
-                onClick={() => setShowEditFileModal(true)}
-                className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800/30 text-blue-700 dark:text-blue-400 text-sm font-medium rounded-lg transition-colors"
+                onClick={() => window.print()}
+                className="p-2 text-gray-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                title="In"
               >
-                Sửa
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
               </button>
-              {/* Delete */}
-              <button
-                onClick={() => handleDeleteFile(selectedFile)}
-                className="p-2 text-gray-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                title="Xóa file"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              </button>
+              {/* More options */}
+              <div className="relative group">
+                <button
+                  className="p-2 text-gray-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  title="Thêm tùy chọn"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" /></svg>
+                </button>
+                <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <button
+                    onClick={() => { setFullPreviewFile(selectedFile); setFullPreviewUrl(decisionsApi.getFileUrl(selectedFile._id)) }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600 first:rounded-t-lg"
+                  >
+                    Xem đầy đủ
+                  </button>
+                  <button
+                    onClick={() => setShowEditFileModal(true)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600"
+                  >
+                    Sửa thông tin
+                  </button>
+                  <button
+                    onClick={() => handleDeleteFile(selectedFile)}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 last:rounded-b-lg"
+                  >
+                    Xóa file
+                  </button>
+                </div>
+              </div>
               {/* Close */}
               <button
                 onClick={() => { setSelectedFile(null); setPreviewUrl(null) }}
-                className="p-2 text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                className="p-2 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
@@ -609,7 +700,7 @@ export default function Decisions() {
 
       {/* Full Preview Modal (double click) */}
       {fullPreviewFile && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+<div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-[98vw] h-[98vh] flex flex-col border border-gray-200 dark:border-slate-700">
             {/* Header */}
             <div className="border-b border-gray-200 dark:border-slate-700 px-8 py-5 flex items-center justify-between shrink-0 bg-gray-50 dark:bg-slate-800/50">
@@ -618,7 +709,7 @@ export default function Decisions() {
                 <div className="min-w-0">
                   <h3 className="text-2xl font-bold text-gray-800 dark:text-white truncate">{fullPreviewFile.fileName}</h3>
                   <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-                    {fullPreviewFile.number ? `QĐ ${fullPreviewFile.number}` : ''}{fullPreviewFile.number && fullPreviewFile.uploadedAt ? ' • ' : ''}{fullPreviewFile.uploadedAt ? `Tải lên: ${fullPreviewFile.uploadedAt}` : ''}{fullPreviewFile.fileSize ? ` • ${formatFileSize(fullPreviewFile.fileSize)}` : ''}
+                    {fullPreviewFile.number ? `QĐ ${fullPreviewFile.number}` : ''}{fullPreviewFile.number && fullPreviewFile.uploadedAt ? ' • ' : ''}{fullPreviewFile.uploadedAt ? `${fullPreviewFile.uploadedAt}` : ''}{fullPreviewFile.fileSize ? ` • ${formatFileSize(fullPreviewFile.fileSize)}` : ''}
                   </p>
                 </div>
               </div>
@@ -626,7 +717,7 @@ export default function Decisions() {
                 <a
                   href={decisionsApi.getFileUrl(fullPreviewFile._id)}
                   download={fullPreviewFile.fileName}
-                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-base font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-base font-medium rounded-lg transition-colors"
                 >
                   ⬇️ Tải xuống
                 </a>
@@ -657,6 +748,7 @@ export default function Decisions() {
         </div>
       )}
 
+      </div>
     </div>
   )
 }
@@ -697,13 +789,13 @@ function AddFolderModal({ level, currentPath, files, onClose, onAdd }: {
               value={year}
               onChange={e => setYear(e.target.value)}
               placeholder="VD: 2025"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
             />
             <p className="text-xs text-gray-400 mt-1">Định dạng: YYYY</p>
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-xl transition-colors">Hủy</button>
-            <button onClick={handleSubmit} className="flex-1 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors">Thêm</button>
+            <button onClick={handleSubmit} className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">Thêm</button>
           </div>
         </div>
       </div>
@@ -729,7 +821,7 @@ function AddFileModal({ year, onClose, onUpload }: {
     e.preventDefault()
     setDragOver(false)
     if (e.dataTransfer.files) {
-      setSelectedFiles(prev => [...prev, ...Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf')])
+setSelectedFiles(prev => [...prev, ...Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf')])
     }
   }
 
@@ -763,7 +855,7 @@ function AddFileModal({ year, onClose, onUpload }: {
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-              dragOver ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-300 dark:border-slate-600 hover:border-primary-300'
+              dragOver ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-300 dark:border-slate-600 hover:border-indigo-300'
             }`}
           >
             <input ref={fileInputRef} type="file" accept=".pdf" multiple onChange={handleFileChange} className="hidden" />
@@ -776,7 +868,7 @@ function AddFileModal({ year, onClose, onUpload }: {
                 <div key={i} className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 rounded-lg px-3 py-2 text-sm">
                   <span className="text-red-500">📄</span>
                   <span className="text-gray-700 dark:text-slate-300 truncate flex-1">{f.name}</span>
-                  <span className="text-xs text-gray-400">{formatFileSize(f.size)}</span>
+<span className="text-xs text-gray-400">{formatFileSize(f.size)}</span>
                   <button onClick={(e) => { e.stopPropagation(); handleRemoveFile(i) }} className="text-gray-400 hover:text-red-500 text-xs ml-1">✕</button>
                 </div>
               ))}
@@ -785,7 +877,7 @@ function AddFileModal({ year, onClose, onUpload }: {
 
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-xl transition-colors">Hủy</button>
-            <button onClick={handleSubmit} className="flex-1 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors">
+            <button onClick={handleSubmit} className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">
               Tải lên {selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}
             </button>
           </div>
@@ -803,7 +895,7 @@ function EditFileModal({ file, onClose, onSave }: {
 }) {
   const [number, setNumber] = useState(file.number)
   const [date, setDate] = useState(file.date)
-  const inputCls = "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-primary-500 outline-none"
+  const inputCls = "w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl text-sm text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
@@ -823,14 +915,14 @@ function EditFileModal({ file, onClose, onSave }: {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Ngày ban hành</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
+<input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-xl transition-colors">Hủy</button>
             <button
               onClick={() => onSave({ number, date })}
-              className="flex-1 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors"
+              className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
             >
               Lưu thay đổi
             </button>

@@ -363,7 +363,7 @@ export default function Documents() {
 
   // ── Main render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-5 h-full" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div className="flex flex-col gap-5 h-full animate-fade-in" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
       {/* ── Top bar with Program filter ─────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4">
@@ -392,33 +392,6 @@ export default function Documents() {
               {prog}
             </button>
           ))}
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={async () => {
-              try {
-                const [docsRes, recsRes] = await Promise.all([docstoreApi.list(), docstoreApi.listStudentRecords()])
-                setDocuments(docsRes.data.data || []); setStudentRecords(recsRes.data.data || [])
-                toast.success('Đã làm mới')
-              } catch { toast.error('Làm mới thất bại') }
-            }}
-            className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
-            title="Làm mới"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shadow-sm shadow-indigo-200 dark:shadow-indigo-900/30"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Tải lên
-          </button>
         </div>
       </div>
 
@@ -467,107 +440,6 @@ export default function Documents() {
           </span>
         </div>
       )}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">Cây thư mục</h3>
-          
-          {/* All button */}
-          <button
-            onClick={() => { setSelectedProgram(null); setSelectedYear(null) }}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors mb-2 ${
-              !selectedProgram
-                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
-                : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-            </svg>
-            <span className="flex-1 text-left">Tất cả tài liệu</span>
-            <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded-md font-semibold">
-              {documents.length}
-            </span>
-          </button>
-
-          {/* Program tree */}
-          <div className="space-y-1">
-            {programFolders.map(prog => {
-              const progCount = countDocsForProgram(prog)
-              const progYears = programYearsMap.get(prog) || []
-              const isProgSelected = selectedProgram === prog
-              
-              return (
-                <div key={prog} className="space-y-0.5">
-                  {/* Program button */}
-                  <button
-                    onClick={() => { setSelectedProgram(prog); setSelectedYear(null) }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isProgSelected
-                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'
-                    }`}
-                  >
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7a2 2 0 012-2h14a2 2 0 012 2m0 0V5a2 2 0 00-2-2H5a2 2 0 00-2 2v2m0 0h16"/>
-                    </svg>
-                    <span className="flex-1 text-left">{prog}</span>
-                    <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-2 py-0.5 rounded-md font-semibold">
-                      {progCount}
-                    </span>
-                  </button>
-
-                  {/* Year sub-items */}
-                  {isProgSelected && progYears.length > 0 && (
-                    <div className="ml-4 space-y-0.5 border-l border-gray-200 dark:border-slate-700 pl-2">
-                      <button
-                        onClick={() => setSelectedYear(null)}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          !selectedYear
-                            ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                            : 'text-gray-500 dark:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/50'
-                        }`}
-                      >
-                        <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <span className="flex-1 text-left">Tất cả năm</span>
-                        <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-semibold">
-                          {progYears.reduce((sum, yr) => sum + countDocsForYear(yr, prog), 0)}
-                        </span>
-                      </button>
-
-                      {progYears.map(year => {
-                        const yearCount = countDocsForYear(year, prog)
-                        const isYearSelected = selectedYear === year
-                        return (
-                          <button
-                            key={year}
-                            onClick={() => setSelectedYear(year)}
-                            className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              isYearSelected
-                                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                                : 'text-gray-500 dark:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700/50'
-                            }`}
-                          >
-                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
-                            <span className="flex-1 text-left">Năm {year}</span>
-                            <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded font-semibold">
-                              {yearCount}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
       {/* ── Search bar ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
@@ -590,6 +462,30 @@ export default function Documents() {
               </button>
             )}
           </div>
+          <button
+            onClick={async () => {
+              try {
+                const [docsRes, recsRes] = await Promise.all([docstoreApi.list(), docstoreApi.listStudentRecords()])
+                setDocuments(docsRes.data.data || []); setStudentRecords(recsRes.data.data || [])
+                toast.success('Đã làm mới')
+              } catch { toast.error('Làm mới thất bại') }
+            }}
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+            title="Làm mới"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shadow-sm shadow-indigo-200 dark:shadow-indigo-900/30 whitespace-nowrap"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Tải lên
+          </button>
         </div>
 
         {/* Search result badges */}
@@ -719,8 +615,6 @@ export default function Documents() {
                                 {q ? highlight(doc.name) : doc.name}
                               </p>
                               <div className="flex items-center gap-2 mt-0.5">
-                                {doc.cohort && <span className="text-[11px] text-gray-400 dark:text-slate-500">Khóa {doc.cohort}</span>}
-                                {doc.className && <><span className="text-gray-300 dark:text-slate-600">·</span><span className="text-[11px] text-gray-400 dark:text-slate-500">{doc.className}</span></>}
                                 {docRecs.length > 0 && (
                                   <span className="inline-flex items-center gap-0.5 text-[11px] text-emerald-600 dark:text-emerald-500 font-medium">
                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
@@ -836,16 +730,7 @@ export default function Documents() {
           </div>
 
           {/* Table footer */}
-          {filteredDocuments.length > 0 && (
-            <div className="flex-shrink-0 px-4 py-2 border-t border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-700/20 flex items-center justify-between">
-              <span className="text-xs text-gray-400 dark:text-slate-500">
-                Hiển thị {filteredDocuments.length} / {documents.length} tài liệu
-              </span>
-              <span className="text-[11px] text-gray-300 dark:text-slate-600 italic">
-                Click để xem nhanh · Double-click để xem đầy đủ
-              </span>
-            </div>
-          )}
+          {filteredDocuments.length > 0 && null}
         </div>
 
         {/* ── Resizable divider ────────────────────────────────────────────── */}

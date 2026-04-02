@@ -106,35 +106,36 @@ router.post('/seed', async (_req, res) => {
 // Public: serve a media file by activity id + media index
 router.get('/:id/media/:idx', async (req, res) => {
   try {
-    const item = await CenterActivity.findById(req.params.id).select('-media.data')
-    if (!item) return res.status(404).json({ success: false, error: { message: 'Not found' } })
+    const item = await CenterActivity.findById(req.params.id)
+    if (!item) return res.status(404).json({ success: false, error: { message: 'Activity not found' } })
+    
     const idx = parseInt(req.params.idx, 10)
     if (isNaN(idx) || idx < 0 || idx >= item.media.length) {
       return res.status(404).json({ success: false, error: { message: 'Media not found' } })
     }
+    
     const m = item.media[idx]
-    res.set('Content-Type', m.mimeType)
-    res.set('Content-Disposition', `inline; filename="${encodeURIComponent(m.fileName)}"`)
-    res.set('Cache-Control', 'public, max-age=86400')
+    
+    // Serve from MongoDB
+    if (m.data) {
+      res.set('Content-Type', m.mimeType)
+      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(m.fileName)}"`)
+      res.set('Cache-Control', 'public, max-age=86400')
+      return res.send(m.data)
+    }
 
-    // Try local file first
+    // Fallback: try local file (for backward compatibility)
     const mediaId = (m as any)._id.toString()
     const filePath = getMediaPath(req.params.id, mediaId, extFromMime(m.mimeType))
-    console.log('Trying to serve media from:', filePath);
     if (fs.existsSync(filePath)) {
-      console.log('File found, serving...');
+      console.log('Serving from legacy file system:', filePath);
+      res.set('Content-Type', m.mimeType)
+      res.set('Content-Disposition', `inline; filename="${encodeURIComponent(m.fileName)}"`)
+      res.set('Cache-Control', 'public, max-age=86400')
       return res.sendFile(filePath)
     }
 
-    console.log('File not found at:', filePath);
-    // Fallback: legacy data in MongoDB
-    const fullItem = await CenterActivity.findById(req.params.id)
-    if (fullItem && fullItem.media[idx]?.data) {
-      console.log('Serving from MongoDB');
-      return res.send(fullItem.media[idx].data)
-    }
-
-    console.log('Media not found anywhere');
+    console.log('Media not found in database or file system');
     res.status(404).json({ success: false, error: { message: 'Media file not found' } })
   } catch (err: any) {
     console.error('Media serve error:', err.message);
@@ -150,23 +151,15 @@ router.post('/', upload.array('files', 10), handleMulterError, async (req: Reque
   try {
     console.log('POST /activities called');
     console.log('Files received:', (req.files as Express.Multer.File[] | undefined)?.length || 0);
-    if (req.files && (req.files as Express.Multer.File[]).length > 0) {
-      console.log('File details:', (req.files as Express.Multer.File[]).map((f: Express.Multer.File) => ({ name: f.originalname, size: f.size, type: f.mimetype })));
-    }
-    console.log('Body:', req.body);
     
     const { title, description, content, icon, category, order, isActive } = req.body
     const files = (req.files as Express.Multer.File[] || [])
 
-    if (!files || files.length === 0) {
-      console.warn('No files received in POST /activities');
-      return res.status(400).json({ success: false, error: { message: 'No files provided' } })
-    }
-
-    // Create media metadata (no binary data in MongoDB)
+    // Create media with binary data stored in MongoDB
     const media = files.map(f => ({
       fileName: Buffer.from(f.originalname, 'latin1').toString('utf8'),
       mimeType: f.mimetype,
+      data: f.buffer, // Store file data in MongoDB
     }))
 
     const item = await CenterActivity.create({
@@ -178,23 +171,14 @@ router.post('/', upload.array('files', 10), handleMulterError, async (req: Reque
       media,
     })
 
-    console.log('Activity created:', item._id);
+    console.log('Activity created with', media.length, 'media files in database');
 
-    // Save files to disk
-    const actId = item._id.toString()
-    item.media.forEach((m: any, i: number) => {
-      const filePath = getMediaPath(actId, m._id.toString(), extFromMime(files[i].mimetype))
-      console.log('Saving file to:', filePath, 'Size:', files[i].buffer.length);
-      fs.writeFileSync(filePath, files[i].buffer)
-    })
-
-    console.log('Files saved successfully');
-
-    // Return without media data
+    // Return without media data for performance
     const result = item.toObject()
     ;(result as any).media = result.media.map((m: any) => ({ _id: m._id, fileName: m.fileName, mimeType: m.mimeType }))
     res.json({ success: true, data: result })
   } catch (err: any) {
+    console.error('Create activity error:', err);
     res.status(500).json({ success: false, error: { message: err.message } })
   }
 })
@@ -204,10 +188,8 @@ router.put('/:id', upload.array('files', 10), handleMulterError, async (req: Req
   try {
     console.log('PUT /activities/:id called');
     console.log('Activity ID:', req.params.id);
-    console.log('Body:', req.body);
-    console.log('removeMedia:', req.body.removeMedia);
     
-    const item = await CenterActivity.findById(req.params.id).select('-media.data')
+    const item = await CenterActivity.findById(req.params.id)
     if (!item) return res.status(404).json({ success: false, error: { message: 'Not found' } })
 
     const { title, description, content, icon, category, order, isActive, removeMedia } = req.body
@@ -219,62 +201,38 @@ router.put('/:id', upload.array('files', 10), handleMulterError, async (req: Req
     if (order !== undefined) item.order = parseInt(order, 10)
     if (isActive !== undefined) item.isActive = isActive !== 'false'
 
-    const actId = item._id.toString()
-
     // Remove media by indices (comma-separated)
     if (removeMedia) {
       console.log('Removing media indices:', removeMedia);
       const indices = removeMedia.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)).sort((a: number, b: number) => b - a)
-      console.log('Parsed indices:', indices);
       for (const idx of indices) {
         if (idx >= 0 && idx < item.media.length) {
-          const m = item.media[idx] as any
-          // Delete file from disk
-          const filePath = getMediaPath(actId, m._id.toString(), extFromMime(m.mimeType))
-          console.log('Deleting file:', filePath);
-          try {
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath)
-              console.log('File deleted successfully');
-            } else {
-              console.log('File does not exist at path:', filePath);
-            }
-          } catch (err: any) {
-            console.error('Error deleting file:', err.message);
-          }
           item.media.splice(idx, 1)
-        } else {
-          console.log('Index out of bounds:', idx, 'media length:', item.media.length);
+          console.log('Removed media at index:', idx);
         }
       }
     }
 
-    // Add new media files (metadata only in MongoDB)
+    // Add new media files with data stored in MongoDB
     const newFiles = (req.files as Express.Multer.File[] || [])
     console.log('New files to add:', newFiles.length);
     
     for (const f of newFiles) {
-      item.media.push({ fileName: Buffer.from(f.originalname, 'latin1').toString('utf8'), mimeType: f.mimetype } as any)
+      item.media.push({ 
+        fileName: Buffer.from(f.originalname, 'latin1').toString('utf8'), 
+        mimeType: f.mimetype,
+        data: f.buffer // Store in MongoDB
+      } as any)
     }
 
     await item.save()
-    console.log('Activity saved with', item.media.length, 'media items');
-
-    // Save new files to disk (after save so we have _id)
-    if (newFiles.length > 0) {
-      const savedMedia = item.media.slice(-newFiles.length)
-      savedMedia.forEach((m: any, i: number) => {
-        const filePath = getMediaPath(actId, m._id.toString(), extFromMime(newFiles[i].mimetype))
-        console.log('Saving file to:', filePath);
-        fs.writeFileSync(filePath, newFiles[i].buffer)
-      })
-      console.log('All files saved successfully');
-    }
+    console.log('Activity updated with', item.media.length, 'media items');
 
     const result = item.toObject()
     ;(result as any).media = result.media.map((m: any) => ({ _id: m._id, fileName: m.fileName, mimeType: m.mimeType }))
     res.json({ success: true, data: result })
   } catch (err: any) {
+    console.error('Update activity error:', err);
     res.status(500).json({ success: false, error: { message: err.message } })
   }
 })
@@ -283,11 +241,7 @@ router.put('/:id', upload.array('files', 10), handleMulterError, async (req: Req
 router.delete('/:id', async (req, res) => {
   try {
     await CenterActivity.findByIdAndDelete(req.params.id)
-    // Delete media directory
-    const mediaDir = path.join(MEDIA_DIR, req.params.id)
-    if (fs.existsSync(mediaDir)) {
-      fs.rmSync(mediaDir, { recursive: true, force: true })
-    }
+    console.log('Activity deleted:', req.params.id);
     res.json({ success: true })
   } catch (err: any) {
     res.status(500).json({ success: false, error: { message: err.message } })

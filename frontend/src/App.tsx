@@ -10,7 +10,9 @@ import Documents from './pages/Documents'
 import Decisions from './pages/Decisions'
 // ...existing code...
 import Settings from './pages/Settings'
+import AboutSections from './pages/AboutSections'
 import About from './pages/About'
+import PublicHome from './pages/PublicHome'
 import PublicAbout from './pages/PublicAbout'
 import PublicActivities from './pages/PublicActivities'
 import PublicActivityDetail from './pages/PublicActivityDetail'
@@ -44,6 +46,7 @@ export default function App() {
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/trang-chu" element={<PublicHome />} />
             <Route path="/gioi-thieu" element={<PublicAbout />} />
             <Route path="/hoat-dong" element={<PublicActivities />} />
             <Route path="/hoat-dong/:id" element={<PublicActivityDetail />} />
@@ -56,16 +59,15 @@ export default function App() {
               }
             >
               <Route index element={<Dashboard />} />
-              <Route path="about" element={<About />} />
               <Route path="certificates" element={<CertificateIssuance />} />
               <Route path="documents" element={<Documents />} />
               <Route path="decisions" element={<Decisions />} />
               <Route path="activities" element={<Activities />} />
               <Route path="activities/new" element={<ActivityEditorDemo />} />
-              {/* Báo cáo đã bị loại bỏ */}
               <Route path="settings" element={<Settings />} />
+              <Route path="about-sections" element={<AboutSections />} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/trang-chu" replace />} />
           </Routes>
         </Router>
         <Toaster position="top-right" />

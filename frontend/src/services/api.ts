@@ -90,12 +90,38 @@ export const reportsApi = {
 // ═══════════════════════════════════════════
 // Settings API
 // ═══════════════════════════════════════════
+// Settings API
+// ═══════════════════════════════════════════
 export const settingsApi = {
   list: () => api.get('/settings'),
   create: (data: Record<string, unknown>) => api.post('/settings', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/settings/${id}`, data),
   delete: (id: string) => api.delete(`/settings/${id}`),
   reset: () => api.post('/settings/reset'),
+  uploadLogo: (formData: FormData) => api.post('/settings/upload-logo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  uploadBanner: (formData: FormData) => api.post('/settings/upload-banner', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  deleteLogo: () => api.delete('/settings/logo'),
+  deleteBanner: () => api.delete('/settings/banner'),
+  uploadHomeBanner: (formData: FormData) => api.post('/settings/upload-home-banner', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  deleteHomeBanner: () => api.delete('/settings/home-banner'),
+}
+
+// ═══════════════════════════════════════════
+// About Sections API
+// ═══════════════════════════════════════════
+export const aboutSectionsApi = {
+  list: () => api.get('/about-sections'),
+  get: (id: string) => api.get(`/about-sections/${id}`),
+  create: (data: Record<string, unknown>) => api.post('/about-sections', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/about-sections/${id}`, data),
+  delete: (id: string) => api.delete(`/about-sections/${id}`),
+  reorder: (sections: Array<{ id: string; order: number }>) => api.post('/about-sections/reorder', { sections }),
 }
 
 // ═══════════════════════════════════════

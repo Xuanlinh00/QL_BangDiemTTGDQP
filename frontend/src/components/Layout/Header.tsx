@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/': 'Trang chủ',
+  '/': 'Bảng điều khiển',
   '/about': 'Trang chủ',
   '/documents': 'Bảng điểm',
   '/decisions': 'Quyết định',

@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express'
 import multer from 'multer'
-import path from 'path'
-import fs from 'fs'
 import mongoose from 'mongoose'
 import { DecisionFile, DecisionFolder } from '../models'
 import { requireMongoDB } from '../middleware/mongodb-check.middleware'
@@ -12,15 +10,12 @@ const router = Router()
 router.use(requireMongoDB)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
-// ── File storage on local disk ──
-const UPLOADS_DIR = path.resolve(__dirname, '../../uploads/decisions')
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true })
-}
+// ── Initialize GridFS bucket ──
+let gridFSBucket: mongoose.mongo.GridFSBucket | null = null
 
-function getFilePath(docId: string, ext: string = '.pdf'): string {
-  return path.join(UPLOADS_DIR, `${docId}${ext}`)
-}
+mongoose.connection.on('open', () => {
+  gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db!, { bucketName: 'decisions_files' })
+})
 
 // ── List all decisions (optionally filter by year) ──
 router.get('/', async (req: Request, res: Response) => {
@@ -48,6 +43,15 @@ router.post('/upload', upload.array('files', 50), async (req: Request, res: Resp
     const uploadedFiles = req.files as Express.Multer.File[]
     if (!uploadedFiles || uploadedFiles.length === 0) {
       return res.status(400).json({ success: false, error: 'No files provided' })
+    }
+
+    // Initialize GridFS bucket if not already done
+    if (!gridFSBucket && mongoose.connection.db) {
+      gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'decisions_files' })
+    }
+
+    if (!gridFSBucket) {
+      return res.status(500).json({ success: false, error: 'GridFS not initialized' })
     }
 
     const results = []
@@ -86,13 +90,35 @@ router.post('/upload', upload.array('files', 50), async (req: Request, res: Resp
           pages: 0,
           fileSize: file.size,
           uploadedAt: new Date().toISOString().split('T')[0],
-          source: 'local',
+          source: 'gridfs',
           mimeType: file.mimetype,
         })
 
-        // Save file to local disk
-        const filePath = getFilePath(doc._id.toString())
-        fs.writeFileSync(filePath, file.buffer)
+        // Upload file to GridFS
+        const uploadStream = gridFSBucket.openUploadStream(doc._id.toString(), {
+          metadata: {
+            docId: doc._id.toString(),
+            fileName: file.originalname,
+            mimeType: file.mimetype,
+            uploadedAt: new Date(),
+          },
+        })
+
+        uploadStream.on('error', (err) => {
+          console.error('GridFS upload error:', err)
+        })
+
+        uploadStream.end(file.buffer)
+
+        // Wait for upload to complete
+        await new Promise((resolve, reject) => {
+          uploadStream.on('finish', resolve)
+          uploadStream.on('error', reject)
+        })
+
+        // Update document with GridFS file ID (use doc._id as the file ID)
+        doc.gridfsFileId = doc._id
+        await doc.save()
 
         results.push({
           _id: doc._id,
@@ -134,26 +160,35 @@ router.post('/upload', upload.array('files', 50), async (req: Request, res: Resp
 // ── Download file blob ──
 router.get('/:id/file', async (req: Request, res: Response) => {
   try {
-    const doc = await DecisionFile.findById(req.params.id).select('fileName mimeType fileData')
+    const doc = await DecisionFile.findById(req.params.id)
     if (!doc) {
-      return res.status(404).json({ success: false, error: 'File not found' })
+      return res.status(404).json({ success: false, error: 'File not found in database' })
     }
+
+    // Initialize GridFS bucket if not already done
+    if (!gridFSBucket && mongoose.connection.db) {
+      gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'decisions_files' })
+    }
+
+    if (!gridFSBucket) {
+      return res.status(500).json({ success: false, error: 'GridFS not initialized' })
+    }
+
     res.set('Content-Type', doc.mimeType || 'application/pdf')
     res.set('Content-Disposition', `inline; filename="${encodeURIComponent(doc.fileName)}"`)
 
-    // Try local file first
-    const filePath = getFilePath(req.params.id)
-    if (fs.existsSync(filePath)) {
-      return res.sendFile(filePath)
+    // Use doc._id as the GridFS file ID
+    const fileId = doc.gridfsFileId || doc._id
+    
+    try {
+      const downloadStream = gridFSBucket.openDownloadStream(fileId)
+      return downloadStream.pipe(res)
+    } catch (err) {
+      console.error('GridFS download error:', err)
+      return res.status(404).json({ success: false, error: 'File not found in GridFS' })
     }
-
-    // Fallback: legacy data stored in MongoDB document
-    if (doc.fileData) {
-      return res.send(doc.fileData)
-    }
-
-    res.status(404).json({ success: false, error: 'File data not found' })
   } catch (err: any) {
+    console.error('Download endpoint error:', err)
     res.status(500).json({ success: false, error: err.message })
   }
 })
@@ -179,11 +214,22 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const doc = await DecisionFile.findByIdAndDelete(req.params.id)
     if (!doc) return res.status(404).json({ success: false, error: 'Not found' })
-    // Delete local file if exists
-    const filePath = getFilePath(req.params.id)
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath)
+    
+    // Initialize GridFS bucket if not already done
+    if (!gridFSBucket && mongoose.connection.db) {
+      gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'decisions_files' })
     }
+    
+    // Delete from GridFS if exists
+    if (gridFSBucket) {
+      try {
+        const fileId = doc.gridfsFileId || doc._id
+        await gridFSBucket.delete(fileId)
+      } catch (err) {
+        console.warn('GridFS delete failed:', err)
+      }
+    }
+    
     res.json({ success: true })
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
@@ -290,6 +336,69 @@ router.post('/fix-encoding', async (_req: Request, res: Response) => {
     }
 
     res.json({ success: true, fixed, removed, total: allFiles.length })
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// ── Migrate old files from local disk to GridFS ──
+router.post('/migrate-to-gridfs', async (_req: Request, res: Response) => {
+  try {
+    // Initialize GridFS bucket if not already done
+    if (!gridFSBucket && mongoose.connection.db) {
+      gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: 'decisions_files' })
+    }
+
+    if (!gridFSBucket) {
+      return res.status(500).json({ success: false, error: 'GridFS not initialized' })
+    }
+
+    // Find all files without gridfsFileId (old files)
+    const oldFiles = await DecisionFile.find({ gridfsFileId: { $exists: false } })
+    let migrated = 0
+    let failed = 0
+
+    for (const doc of oldFiles) {
+      try {
+        // Check if file has data in MongoDB
+        if (doc.fileData && doc.fileData.length > 0) {
+          // Upload to GridFS
+          const uploadStream = gridFSBucket.openUploadStream(doc._id.toString(), {
+            metadata: {
+              docId: doc._id.toString(),
+              fileName: doc.fileName,
+              mimeType: doc.mimeType,
+              uploadedAt: new Date(),
+            },
+          })
+
+          uploadStream.on('error', (err) => {
+            console.error('GridFS upload error:', err)
+          })
+
+          uploadStream.end(doc.fileData)
+
+          // Wait for upload to complete
+          await new Promise((resolve, reject) => {
+            uploadStream.on('finish', resolve)
+            uploadStream.on('error', reject)
+          })
+
+          // Update document with GridFS file ID
+          await DecisionFile.findByIdAndUpdate(doc._id, {
+            $set: { gridfsFileId: uploadStream.id, source: 'gridfs' },
+            $unset: { fileData: 1 }, // Remove fileData from MongoDB
+          })
+
+          migrated++
+        }
+      } catch (err) {
+        console.error(`Migration failed for ${doc.fileName}:`, err)
+        failed++
+      }
+    }
+
+    res.json({ success: true, migrated, failed, total: oldFiles.length })
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message })
   }

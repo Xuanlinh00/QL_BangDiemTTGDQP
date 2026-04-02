@@ -126,6 +126,9 @@ export interface ISetting extends MongoDocument {
   label: string
   value: string
   category: string
+  fileData?: Buffer
+  mimeType?: string
+  fileName?: string
 }
 
 const SettingSchema = new Schema<ISetting>({
@@ -133,9 +136,41 @@ const SettingSchema = new Schema<ISetting>({
   label: { type: String, required: true },
   value: { type: String, default: '' },
   category: { type: String, default: 'Chung' },
+  fileData: { type: Buffer },
+  mimeType: { type: String },
+  fileName: { type: String },
 }, { timestamps: true })
 
 export const Setting = mongoose.model<ISetting>('Setting', SettingSchema)
+
+// ── AboutSection (dynamic content sections for About page) ──
+export interface IAboutSection extends MongoDocument {
+  title: string
+  content: string
+  order: number
+  type: 'paragraph' | 'list' | 'quote'
+  isActive: boolean
+  media?: {
+    type: 'image' | 'video'
+    url: string
+    fileName: string
+  }[]
+}
+
+const AboutSectionSchema = new Schema<IAboutSection>({
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  order: { type: Number, required: true, default: 0 },
+  type: { type: String, enum: ['paragraph', 'list', 'quote'], default: 'paragraph' },
+  isActive: { type: Boolean, default: true },
+  media: [{
+    type: { type: String, enum: ['image', 'video'] },
+    url: { type: String },
+    fileName: { type: String }
+  }]
+}, { timestamps: true })
+
+export const AboutSection = mongoose.model<IAboutSection>('AboutSection', AboutSectionSchema)
 
 // ── Document (uploaded files in Documents page) ──
 export interface IDocument extends MongoDocument {

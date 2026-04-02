@@ -111,35 +111,6 @@ const dateString = currentTime.toLocaleDateString('vi-VN', { weekday: 'long', ye
 
   return (
     <div className="space-y-6" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-      {/* Header with gradient */}
-      <div className="relative bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-3xl p-8 shadow-xl overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl"></div>
-        
-        <div className="relative flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-semibold text-white">
-                TVU GDQP-AN
-              </span>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Xin chào, {user?.name || 'Quản lý'} 👋
-            </h1>
-            <p className="text-white/80 text-sm">{dateString}</p>
-          </div>
-          
-          <div className="hidden md:flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
-              <ClockIcon className="w-5 h-5 text-white" />
-              <span className="text-2xl font-bold text-white tabular-nums">{timeString}</span>
-            </div>
-            <p className="text-white/70 text-xs">Hệ thống hoạt động bình thường</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           label="Bảng điểm"

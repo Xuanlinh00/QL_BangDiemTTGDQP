@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { activitiesApi } from '../services/api'
+import PublicLayout from '../components/Layout/PublicLayout'
+import { useSettings } from '../hooks/useSettings'
 
 interface MediaItem {
   _id: string
@@ -37,6 +39,11 @@ function getLocalActivities(): Activity[] {
 export default function PublicActivities() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
+  const { getSetting } = useSettings()
+
+  // Get settings
+  const primaryColor = getSetting('color_header', '#2B3A9F')
+  const highlightColor = getSetting('color_highlight', '#fbbf24')
 
   const loadActivities = useCallback(async () => {
     try {
@@ -63,66 +70,18 @@ export default function PublicActivities() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-[#1e3a8a] text-white">
-          <div className="max-w-7xl mx-auto px-4 py-3">
-            <nav className="flex items-center gap-8 text-sm font-medium">
-              <Link to="/gioi-thieu" className="hover:text-yellow-300 transition-colors">TRANG CHỦ</Link>
-              <span className="hover:text-yellow-300 transition-colors cursor-pointer">GIỚI THIỆU</span>
-              <span className="hover:text-yellow-300 transition-colors cursor-pointer">TIN TỨC - SỰ KIỆN</span>
-              <Link to="/hoat-dong" className="text-yellow-300 font-bold">HOẠT ĐỘNG</Link>
-              <span className="hover:text-yellow-300 transition-colors cursor-pointer">LIÊN KẾT</span>
-              <span className="hover:text-yellow-300 transition-colors cursor-pointer">THÔNG BÁO</span>
-            </nav>
-          </div>
-        </div>
-
-        {/* Title Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 py-8">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center gap-3">
-              <div className="w-1 h-10 bg-yellow-400"></div>
-              <h1 className="text-3xl font-bold text-white tracking-wide">HOẠT ĐỘNG</h1>
-            </div>
-          </div>
-        </div>
-
+      <PublicLayout title="HOẠT ĐỘNG">
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: primaryColor }}></div>
         </div>
-      </div>
+      </PublicLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header Navigation */}
-      <div className="bg-[#1e3a8a] text-white">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <nav className="flex items-center gap-8 text-sm font-medium">
-            <Link to="/gioi-thieu" className="hover:text-yellow-300 transition-colors">TRANG CHỦ</Link>
-            <span className="hover:text-yellow-300 transition-colors cursor-pointer">GIỚI THIỆU</span>
-            <span className="hover:text-yellow-300 transition-colors cursor-pointer">TIN TỨC - SỰ KIỆN</span>
-            <Link to="/hoat-dong" className="text-yellow-300 font-bold">HOẠT ĐỘNG</Link>
-            <span className="hover:text-yellow-300 transition-colors cursor-pointer">LIÊN KẾT</span>
-            <span className="hover:text-yellow-300 transition-colors cursor-pointer">THÔNG BÁO</span>
-          </nav>
-        </div>
-      </div>
-
-      {/* Title Banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 py-8">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-3">
-            <div className="w-1 h-10 bg-yellow-400"></div>
-            <h1 className="text-3xl font-bold text-white tracking-wide">HOẠT ĐỘNG</h1>
-          </div>
-        </div>
-      </div>
-
+    <PublicLayout title="HOẠT ĐỘNG">
       {/* Activities Grid */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
+      <div className="max-w-7xl mx-auto px-4 py-12 animate-fade-in">
         {activities.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-gray-500 text-lg">Chưa có hoạt động nào được đăng tải.</p>
@@ -158,7 +117,7 @@ export default function PublicActivities() {
 
                 {/* Content */}
                 <div className="p-5">
-                  <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-2 transition-colors" style={{ color: 'inherit' }} onMouseEnter={(e) => e.currentTarget.style.color = primaryColor} onMouseLeave={(e) => e.currentTarget.style.color = 'inherit'}>
                     {activity.title}
                   </h3>
                   <p className="text-gray-600 text-sm line-clamp-3 leading-relaxed">
@@ -170,13 +129,6 @@ export default function PublicActivities() {
           </div>
         )}
       </div>
-
-      {/* Footer */}
-      <div className="bg-gray-100 border-t border-gray-200 py-8 mt-12">
-        <div className="max-w-7xl mx-auto px-4 text-center text-gray-600">
-          <p>© {new Date().getFullYear()} Trung tâm Giáo dục Quốc phòng và An ninh - Đại học Trà Vinh</p>
-        </div>
-      </div>
-    </div>
+    </PublicLayout>
   )
 }
